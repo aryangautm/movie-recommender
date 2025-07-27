@@ -1,127 +1,136 @@
-Film Echo MVP README
-Overview
+# Cineko: A Movie Recommender Beyond Ratings
 
-Film Echo is an innovative, anonymous movie discovery platform that connects films based on similarities rather than traditional ratings. This MVP (Minimum Viable Product) serves as an "Anonymous Discovery Engine," focusing on AI-seeded graphs and community-driven voting to help users explore movies through relational links. It validates the core concept of rating-free discovery by allowing users to browse, vote on similarities, and receive transparent recommendations.
+<p align="center">
+    <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python Version">
+    <img src="https://img.shields.io/badge/Framework-FastAPI-green" alt="FastAPI">
+    <img src="https://img.shields.io/badge/Graph-Neo4j-orange.svg" alt="Neo4j Version">
+    <img src="https://img.shields.io/badge/license-Apache--2.0-lightgrey" alt="License">
+</p>
 
-The platform emphasizes pure connections: no judgments, just mappings of what movies feel alike. Built with scalability in mind, it uses a hybrid database approach to handle movie metadata and similarity networks efficiently.
-Key Features
+GraphRecs is a modern movie recommendation engine built on a simple yet powerful philosophy: **ratings are flawed, but relationships are meaningful.** Instead of asking "Is this movie good?", we ask "What does this movie *feel* like?".
 
-    Movie Search and Autocomplete: Quickly find films using intuitive search with real-time suggestions.
+This project moves away from traditional star ratings and instead builds a dynamic graph network where movies are connected based on their contextual similarity. These connections are seeded by advanced AI and refined by community contributions, creating a recommendation system that understands nuance and personal taste.
 
-    Movie Pages: Detailed views including metadata (title, release year, plot summary, poster), and a "Movies Like This" section showing similar films based on AI and user votes.
+---
 
-    Anonymous Voting: Users can suggest similarities with a simple "Link as similar?" button. Votes are limited via browser fingerprinting to prevent abuse without requiring accounts.
+## ✨ Core Features
 
-    Transparent Recommendations: Displays similarity sources (e.g., AI scores presented as initial "votes" to encourage community input).
+*   **🧠 AI-Powered Similarity:** Utilizes Sentence-BERT models to understand the semantic meaning of movie plots, themes, and tone, creating a rich baseline of connections.
+*   **🕸️ Graph-Based Network:** All movies and their relationships are stored in a Neo4j graph database, allowing for powerful and fast traversal to find "movies like this one."
+*   **🚫 Rating-Free Philosophy:** No 5-star ratings. No thumbs up/down. Recommendations are discovered by exploring connections between movies you already know.
+*   **🔗 Community-Driven Connections (V2):** The AI-seeded graph is designed to be augmented by user votes, allowing the community to collaboratively define what makes movies similar.
+*   **🚀 Built for Scale:** A modern, modular architecture using FastAPI, PostgreSQL, and Neo4j, designed to be scalable, maintainable, and production-ready.
 
-    Browsable Clusters: Grouped movie collections, like "Inception with mind-bending thrillers," for endless exploration via clickable lists.
+---
 
-    Email Signup: Optional sign-up for updates on new features and releases.
+## 🛠️ Tech Stack & Architecture
 
-    No User Accounts: Keeps it lightweight and privacy-focused for the MVP phase.
+The system is built with a decoupled, microservice-friendly approach.
 
-Tech Stack
+| Component             | Technology                                                              | Purpose                                          |
+| --------------------- | ----------------------------------------------------------------------- | ------------------------------------------------ |
+| **Backend API**       | ![FastAPI](https://img.shields.io/badge/FastAPI-0?style=flat&logo=fastapi) | High-performance, asynchronous API service.      |
+| **Relational Data**   | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-61DAFB?style=flat&logo=postgresql) | Stores static movie metadata (titles, overviews). |
+| **Graph Data**        | ![Neo4j](https://img.shields.io/badge/Neo4j-white?style=flat&logo=neo4j) | Stores the core movie-similarity graph network.  |
+| **AI / Embeddings**   | ![PyTorch](https://img.shields.io/badge/PyTorch-lightgrey?style=flat&logo=pytorch) `sentence-transformers` | Generates semantic vectors from movie text.      |
+| **Async Tasks (V2)**  | ![Celery](https://img.shields.io/badge/Celery-37814A?style=flat&logo=celery) ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis) | Manages background jobs like voting updates.     |
+| **Frontend (Planned)**| ![React](https://img.shields.io/badge/React-lightgrey?style=flat&logo=react) | The user interface for discovery.                |
 
-This MVP is designed for lean development and easy deployment. Here's the breakdown:
-Component	Technology	Purpose
-Frontend	React	User interface for search, browsing, and voting.
-Backend	FastAPI	API handling requests, voting, and graph queries.
-Graph Database	Neo4j (AuraDB Free Tier)	Storing and querying movie similarity networks.
-Metadata Database	PostgreSQL (Heroku Hobby Dev)	Holding static movie data from TMDb.
-Caching	Redis	Fast access to popular queries and recommendations.
-Task Queue	Celery with Redis	Asynchronous processing of votes.
-Offline Processing	Python Scripts	Initial data pull from TMDb, vector creation with Sentence-BERT, and graph seeding.
-Hosting	Heroku/AWS Fargate (Hobby/Basic) for backend; Vercel/Netlify (Free) for frontend.	
-Installation and Setup
-Prerequisites
+### High-Level System Flow (MVP)
 
-    Python 3.8+
+```
++----------------+      +------------------+      +------------------+
+|      User      |----->|  FastAPI Backend |----->|  PostgreSQL DB   |
+| (React Client) |      |   (API Logic)    |      | (Movie Metadata) |
++----------------+      +--------+---------+      +------------------+
+                                 |
+                                 |
+                                 v
+                         +------------------+
+                         |   Neo4j Graph DB |
+                         | (Similarity Edges) |
+                         +------------------+
+```
 
-    Node.js 16+
+---
 
-    Accounts for: TMDb API, Neo4j AuraDB, PostgreSQL, Redis (or use managed services like Heroku).
+## 🚀 Getting Started
 
-    Install dependencies: pip install fastapi uvicorn celery redis sentence-transformers neo4j requests for backend; npm install for frontend.
+Follow these steps to get the backend running locally.
 
-Steps
+### Prerequisites
 
-    Clone the Repository:
+*   Python 3.10+
+*   Docker (Recommended for databases) or local installations of PostgreSQL and Neo4j.
+*   An API key from [The Movie Database (TMDb)](https://www.themoviedb.org/settings/api).
 
-text
-git clone https://github.com/yourusername/film-echo-mvp.git
-cd film-echo-mvp
+### 1. Clone the Repository
 
-Set Up Environment Variables:
-Create a .env file with keys like:
+```bash
+git clone https://github.com/aryangautm/movie-recommender.git
+cd movie-recommender
+```
 
-    TMDB_API_KEY=your_tmdb_key
+### 2. Configure Environment
 
-    NEO4J_URI=your_neo4j_uri
+Navigate to the `backend` directory.
 
-    NEO4J_USER=neo4j
+```bash
+cd backend
+```
 
-    NEO4J_PASSWORD=your_password
+Create a `.env` file by copying the example template.
 
-    POSTGRES_URI=your_postgres_connection_string
+```bash
+cp .env.example .env
+```
 
-    REDIS_URI=your_redis_uri
+Now, edit `.env` and fill in your credentials for TMDb, PostgreSQL, and Neo4j.
 
-Offline Data Seeding:
-Run Python scripts to populate the databases:
+### 3. Install Dependencies
 
-    text
-    python scripts/pull_tmdb_data.py  # Fetches ~50k movies
-    python scripts/generate_vectors.py  # Uses SBERT for similarity vectors
-    python scripts/build_graph.py  # Seeds Neo4j with initial edges
+```bash
+pip install -r requirements.txt
+```
 
-    Install Dependencies:
+### 4. Populate the Databases
 
-        Backend: pip install -r requirements.txt
+Run the ingestion scripts in the correct order.
 
-        Frontend: cd frontend && npm install
+**First, ingest metadata into PostgreSQL:**
 
-Running the Project
+```bash
+python -m scripts.ingest_metadata
+```
 
-    Start the Backend:
+**Second, seed the AI similarity graph in Neo4j:**
+*(This may take a while as it downloads the ML model and processes data.)*
 
-text
-celery -A tasks worker --loglevel=info  # Start worker for async tasks
-uvicorn main:app --reload  # Run FastAPI server
+```bash
+python -m scripts.seed_graph
+```
 
-Start the Frontend:
+### 5. Run the API Server
 
-    text
-    cd frontend
-    npm start
+```bash
+uvicorn app.main:app --reload
+```
 
-    Access the App:
-    Open http://localhost:3000 in your browser. For production, deploy to hosting services as noted in the tech stack.
+The API will be available at `http://127.0.0.1:8000`. You can access the interactive documentation at `http://127.0.0.1:8000/docs`.
 
-The system uses fingerprinting (e.g., via fingerprintjs2) for anonymous vote limiting. Ensure Redis is running for caching and queues.
-Usage
+---
 
-    Discover Movies: Search for a film, view its page, and explore "Movies Like This" lists.
+## 🗺️ Project Roadmap (Future Work)
 
-    Vote on Similarities: On a movie page, search for another film and click "Link as similar?" to contribute anonymously.
+The current version provides the core read-only recommendation engine. Future development will focus on:
 
-    Browse Clusters: Click through recommendation lists to find new favorites based on community and AI links.
+-   [ ] **Phase 2: Frontend UI** - Building the complete React-based user interface.
+-   [ ] **Phase 3: Interactive Voting** - Implementing anonymous and user-based voting to refine the graph.
+-   [ ] **Phase 4: User Accounts & Profiles** - Allowing users to create "taste profiles" and get personalized recommendations.
+-   [ ] **Phase 5: Advanced Moderation** - Building a trust score system to weigh community votes.
 
-    Sign Up for Updates: Enter your email on the homepage for notifications.
+---
 
-This MVP focuses on core validation: user engagement with voting and discovery without logins.
-Contributing
+## 📜 License
 
-We welcome contributions to improve the MVP!
-
-    Fork the repo and create a pull request.
-
-    Focus areas: Bug fixes, UI enhancements, or expanding the AI seeding scripts.
-
-    Follow the code style: Use PEP 8 for Python and ESLint for JavaScript.
-
-    Test thoroughly, especially voting flows and graph queries.
-
-For issues or suggestions, open a GitHub issue.
-License
-
-This project is licensed under the MIT License. See the LICENSE file for details.
+This project is licensed under the Apache-2.0 License. See the `LICENSE` file for details.

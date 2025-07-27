@@ -24,3 +24,15 @@ class Movie(MovieBase):
 
     class Config:
         from_attributes = True
+
+
+class MovieSearchResult(BaseModel):
+    id: int
+    title: str
+    release_year: Optional[int]
+    poster_path: Optional[str]
+
+
+class SimilarMovie(Movie):
+    ai_score: float
+    user_votes: int
