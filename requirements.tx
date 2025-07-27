@@ -2,3 +2,7 @@ sqlalchemy
 psycopg2-binary
 pydantic-settings
 tqdm
+neo4j
+sentence-transformers
+torch
+numpy
