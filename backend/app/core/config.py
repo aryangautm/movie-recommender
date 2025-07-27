@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     Manages application settings loaded from environment variables.
     """
 
+    CORS_ORIGINS: str
+
     TMDB_API_KEY: str
     DATABASE_URL: str
 
