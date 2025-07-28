@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.graph import close_graph_connection, connect_to_graph
-from backend.app.api.v1.endpoints import movies
+from app.api.v1.endpoints import movies
 
 
 @asynccontextmanager
