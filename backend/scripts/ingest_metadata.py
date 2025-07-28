@@ -1,113 +1,226 @@
+import json
+import os
+import sys
+
 import requests
-import time
-from sqlalchemy.orm import Session
+from requests.adapters import HTTPAdapter
+from sqlalchemy.exc import SQLAlchemyError
 from tqdm import tqdm
+from urllib3.util.retry import Retry
+
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.core.config import settings
-from app.core.database import Base, engine, SessionLocal, Movie
+from app.core.database import Base, SessionLocal, engine
+from app.crud import crud_movie
 
+# --- CONFIGURABLE FILTERS ---
+ORIGINAL_LANGUAGE = "te"
+ORIGIN_COUNTRY = "IN"
+
+# --- API CONSTANTS ---
 TMDB_API_URL = "https://api.themoviedb.org/3"
-MOVIES_TO_FETCH = 50000
-MAX_PAGE = 500
+API_MAX_PAGE_LIMIT = 500
+DB_BATCH_SIZE = 1000
+
+BACKUP_FILE_PATH = "scripts/movies_backup.json"
 
 
-def get_genre_map():
-    """Fetches the genre ID to name mapping from TMDb."""
+def create_resilient_session() -> requests.Session:
+    session = requests.Session()
+    retry_strategy = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"],
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+def get_genre_map(session: requests.Session):
     url = f"{TMDB_API_URL}/genre/movie/list"
     params = {"api_key": settings.TMDB_API_KEY}
-    response = requests.get(url, params=params)
+    response = session.get(url, params=params)
     response.raise_for_status()
     genres = response.json().get("genres", [])
     return {genre["id"]: genre["name"] for genre in genres}
 
 
-def fetch_popular_movies(db: Session):
-    """Fetches popular movies from TMDb and stores them in the database."""
-    print("Fetching genre map...")
-    genre_map = get_genre_map()
-
-    movies_to_insert = []
-    fetched_movie_ids = set(row[0] for row in db.query(Movie.id).all())
+def discover_initial_movie_data(session: requests.Session):
     print(
-        f"Found {len(fetched_movie_ids)} existing movies in the database. Will skip these."
+        f"Discovering movies for language='{ORIGINAL_LANGUAGE}' and country='{ORIGIN_COUNTRY}'..."
     )
+    params = {
+        "api_key": settings.TMDB_API_KEY,
+        "sort_by": "popularity.desc",
+        "page": 1,
+        "with_original_language": ORIGINAL_LANGUAGE,
+        "with_origin_country": ORIGIN_COUNTRY,
+    }
+    response = session.get(f"{TMDB_API_URL}/discover/movie", params=params)
+    response.raise_for_status()
+    data = response.json()
+    return data.get("total_pages", 0), data.get("total_results", 0)
 
-    # Using tqdm for a visual progress bar
-    with tqdm(total=MOVIES_TO_FETCH, desc="Fetching Movies") as pbar:
-        for page in range(1, MAX_PAGE + 1):
-            if len(movies_to_insert) + len(fetched_movie_ids) >= MOVIES_TO_FETCH:
-                break
 
-            url = f"{TMDB_API_URL}/discover/movie"
-            params = {
-                "api_key": settings.TMDB_API_KEY,
-                "sort_by": "popularity.desc",
-                "page": page,
-                "include_adult": False,
-                "include_video": False,
-            }
+def fetch_all_movies_from_api(session: requests.Session) -> list:
+    """
+    Fetches all movie data from the API and returns a de-duplicated list of dicts.
+    """
+    total_pages_api, total_results_api = discover_initial_movie_data(session)
+    pages_to_fetch = min(total_pages_api, API_MAX_PAGE_LIMIT)
 
+    print(
+        f"TMDb reports {total_results_api} results. We will fetch from {pages_to_fetch} pages."
+    )
+    if pages_to_fetch == 0:
+        return []
+
+    genre_map = get_genre_map(session)
+    all_movies = []
+
+    # This prevents sending duplicate IDs in a single batch to the database.
+    seen_ids = set()
+
+    with tqdm(total=pages_to_fetch, desc="Fetching Pages") as pbar:
+        for page in range(1, pages_to_fetch + 1):
             try:
-                response = requests.get(url, params=params)
+                response = session.get(
+                    f"{TMDB_API_URL}/discover/movie",
+                    params={
+                        "api_key": settings.TMDB_API_KEY,
+                        "sort_by": "popularity.desc",
+                        "page": page,
+                        "with_original_language": ORIGINAL_LANGUAGE,
+                        "with_origin_country": ORIGIN_COUNTRY,
+                    },
+                )
                 response.raise_for_status()
-                data = response.json()
 
-                for movie_data in data.get("results", []):
+                for movie_data in response.json().get("results", []):
                     movie_id = movie_data.get("id")
-                    if not movie_id or movie_id in fetched_movie_ids:
+
+                    if (
+                        not movie_id
+                        or not movie_data.get("overview")
+                        or movie_id in seen_ids
+                    ):
                         continue
 
-                    # Extract year from release_date string, handle missing dates
-                    release_date = movie_data.get("release_date")
-                    year = int(release_date.split("-")[0]) if release_date else None
+                    # Mark this ID as seen for this run
+                    seen_ids.add(movie_id)
 
-                    # Map genre IDs to names
-                    genre_names = [
-                        {"id": gid, "name": genre_map.get(gid)}
-                        for gid in movie_data.get("genre_ids", [])
-                        if genre_map.get(gid)
-                    ]
+                    release_date = movie_data.get("release_date")
+                    year = (
+                        int(release_date.split("-")[0])
+                        if release_date and "-" in release_date
+                        else None
+                    )
 
                     movie = {
-                        "id": movie_id,
+                        "id": movie_data.get("id"),
                         "title": movie_data.get("title"),
                         "overview": movie_data.get("overview"),
                         "release_year": year,
                         "poster_path": movie_data.get("poster_path"),
-                        "genres": genre_names,
+                        "genres": [
+                            {"id": gid, "name": genre_map.get(gid)}
+                            for gid in movie_data.get("genre_ids", [])
+                            if gid in genre_map
+                        ],
                     }
-                    movies_to_insert.append(movie)
-                    fetched_movie_ids.add(movie_id)
-                    pbar.update(1)
-
-                # Be a good API citizen
-                time.sleep(0.1)
-
+                    all_movies.append(movie)
             except requests.RequestException as e:
-                print(f"Error fetching page {page}: {e}")
-                time.sleep(5)  # Wait before retrying
+                print(
+                    f"\nFailed to fetch page {page} after multiple retries: {e}. Skipping page."
+                )
 
-    if movies_to_insert:
-        print(f"\nFound {len(movies_to_insert)} new movies. Performing bulk insert...")
-        db.bulk_insert_mappings(Movie, movies_to_insert)
-        db.commit()
-        print("Bulk insert complete.")
-    else:
-        print("\nNo new movies to add.")
+            pbar.update(1)
+
+    return all_movies
 
 
-def main():
-    print("Starting metadata ingestion process...")
-    Base.metadata.create_all(bind=engine)
+def store_movies_in_db(movies: list):
+    """
+    Takes a list of movies and upserts them into the database in batches.
+    Includes exception handling for database operations.
+    """
+    if not movies:
+        print("No movies to store in the database.")
+        return
 
+    print(f"\nPreparing to upsert {len(movies)} movies into the database...")
     db = SessionLocal()
     try:
-        fetch_popular_movies(db)
+        Base.metadata.create_all(bind=engine)
+
+        total_movies_processed = 0
+        with tqdm(total=len(movies), desc="Upserting to DB") as pbar:
+            for i in range(0, len(movies), DB_BATCH_SIZE):
+                batch = movies[i : i + DB_BATCH_SIZE]
+                try:
+                    crud_movie.bulk_upsert_movies(db, batch)
+                    total_movies_processed += len(batch)
+                    pbar.update(len(batch))
+                except SQLAlchemyError as e:
+                    print(
+                        f"\nDatabase error occurred during batch {i//DB_BATCH_SIZE + 1}. Rolling back."
+                    )
+                    print(f"Error: {e}")
+                    db.rollback()  # Rollback the failed transaction
+                    raise
+
+        print(f"\nSuccessfully processed and stored {total_movies_processed} movies.")
+
     finally:
         db.close()
 
-    print("Metadata ingestion process finished.")
+
+def main():
+    """Main orchestration function."""
+
+    # --- Stage 1: Fetching data from API ---
+    print("--- Stage 1: Fetching data from TMDb API ---")
+    session = create_resilient_session()
+    try:
+        all_movies = fetch_all_movies_from_api(session)
+    finally:
+        session.close()
+
+    if not all_movies:
+        print("No movies fetched from API. Exiting.")
+        return
+
+    # --- Stage 2: Backing up data to local file ---
+    print(
+        f"\n--- Stage 2: Backing up {len(all_movies)} movies to {BACKUP_FILE_PATH} ---"
+    )
+    try:
+        with open(BACKUP_FILE_PATH, "w", encoding="utf-8") as f:
+            json.dump(all_movies, f, ensure_ascii=False, indent=4)
+        print(f"Successfully created local backup.")
+    except IOError as e:
+        print(f"Error writing to backup file: {e}")
+        # We can still proceed to the database stage even if backup fails.
+
+    # --- Stage 3: Storing data in database ---
+    print(f"\n--- Stage 3: Storing movies in PostgreSQL database ---")
+    try:
+        store_movies_in_db(all_movies)
+    except Exception as e:
+        print(
+            f"\nAn unrecoverable error occurred during the database storage phase: {e}"
+        )
+        print("Please check the database connection and logs.")
+        print(
+            f"The fetched data is safely stored in '{BACKUP_FILE_PATH}' for a future retry."
+        )
 
 
 if __name__ == "__main__":
+    print("--- Starting Metadata Ingestion Process ---")
     main()
+    print("--- Metadata Ingestion Process Finished ---")

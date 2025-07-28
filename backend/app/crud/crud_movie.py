@@ -1,7 +1,9 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from typing import Any, Dict, List, Set
+
 from neo4j import Driver
-from typing import List, Dict, Any, Set
+from sqlalchemy import desc
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.orm import Session
 
 from ..models.movie import Movie
 
@@ -13,6 +15,27 @@ def get_existing_movie_ids(db: Session) -> Set[int]:
 
 def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
     db.bulk_insert_mappings(Movie, movies)
+    db.commit()
+
+
+def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
+    """
+    Performs a bulk "upsert" (insert or update) of movies into the database.
+    If a movie with the same ID already exists, it will be updated.
+    If it does not exist, it will be inserted.
+    """
+    if not movies:
+        return
+
+    stmt = insert(Movie.__table__).values(movies)
+
+    # Define what to do on conflict (i.e., when a movie ID already exists)
+    # We update all columns except for the 'id' itself.
+    update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
+
+    upsert_stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_dict)
+
+    db.execute(upsert_stmt)
     db.commit()
 
 

@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.app.api.v1.endpoints import movies
 from app.core.config import settings
-from app.core.graph import connect_to_graph, close_graph_connection
+from app.core.graph import close_graph_connection, connect_to_graph
+from backend.app.api.v1.endpoints import movies
 
 
 @asynccontextmanager
