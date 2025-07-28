@@ -1,6 +1,4 @@
-<p align="center">
-    <h1>Cineko: A Movie Recommender Beyond Ratings</h1>
-</p>
+# Cineko: A Movie Recommender Beyond Ratings
 
 <p align="center">
     <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python Version">
@@ -9,7 +7,7 @@
     <img src="https://img.shields.io/badge/license-Apache--2.0-lightgrey" alt="License">
 </p>
 
-GraphRecs is a modern movie recommendation engine built on a simple yet powerful philosophy: **ratings are flawed, but relationships are meaningful.** Instead of asking "Is this movie good?", we ask "What does this movie *feel* like?".
+Cineko is a modern movie recommendation engine built on a simple yet powerful philosophy: **ratings are flawed, but relationships are meaningful.** Instead of asking "Is this movie good?", we ask "What does this movie *feel* like?".
 
 This project moves away from traditional star ratings and instead builds a dynamic graph network where movies are connected based on their contextual similarity. These connections are seeded by advanced AI and refined by community contributions, creating a recommendation system that understands nuance and personal taste.
 
