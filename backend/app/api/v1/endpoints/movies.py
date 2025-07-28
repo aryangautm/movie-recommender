@@ -1,9 +1,5 @@
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from neo4j import Driver
-from sqlalchemy.orm import Session
-
 from app.core.database import get_db
 from app.core.graph import get_graph_driver
 from app.crud.crud_movie import (
@@ -13,6 +9,9 @@ from app.crud.crud_movie import (
     search_movies_by_title,
 )
 from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie
+from fastapi import APIRouter, Depends, HTTPException, Query
+from neo4j import Driver
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -29,7 +28,7 @@ def search_movies(
     return movies
 
 
-@router.get("/movies/{movie_id}", response_model=Movie)
+@router.get("/{movie_id}", response_model=Movie)
 def read_movie(movie_id: int, db: Session = Depends(get_db)):
     """
     Get a single movie by its TMDb ID.
@@ -40,7 +39,7 @@ def read_movie(movie_id: int, db: Session = Depends(get_db)):
     return db_movie
 
 
-@router.get("/movies/{movie_id}/similar", response_model=List[SimilarMovie])
+@router.get("/{movie_id}/similar", response_model=List[SimilarMovie])
 def read_similar_movies(
     movie_id: int,
     db: Session = Depends(get_db),

@@ -1,6 +1,8 @@
 import logging
+
 from celery import Celery
-from neo4j import GraphDatabase, Driver
+from celery.signals import worker_shutdown
+from neo4j import Driver, GraphDatabase
 
 from .core.config import settings
 from .crud import crud_movie
@@ -10,13 +12,15 @@ logger = logging.getLogger(__name__)
 
 celery_app = Celery("worker", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
 
+celery_app.conf.imports = ("app.celery_worker",)
+
+
 neo4j_driver: Driver = None
 
 
 def get_neo4j_driver():
-    """Initializes and returns a Neo4j driver instance for the worker."""
     global neo4j_driver
-    if neo4j_driver is None:
+    if neo4j_driver is None or not neo4j_driver.is_open():
         try:
             neo4j_driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
@@ -32,12 +36,10 @@ def get_neo4j_driver():
 
 
 @celery_app.task(
+    name="tasks.update_vote_count",
     bind=True,
     autoretry_for=(Exception,),
-    retry_kwargs={
-        "max_retries": 3,
-        "countdown": 5,
-    },
+    retry_kwargs={"max_retries": 3, "countdown": 5},
 )
 def update_vote_count(self, movie_id_1: int, movie_id_2: int):
     """
@@ -54,17 +56,17 @@ def update_vote_count(self, movie_id_1: int, movie_id_2: int):
                 f"Successfully updated vote for pair ({movie_id_1}, {movie_id_2})"
             )
         else:
-            # This would happen if the relationship doesn't exist, which is a data integrity issue.
             logger.warning(
                 f"Could not find relationship to update for pair ({movie_id_1}, {movie_id_2})"
             )
     except Exception as e:
-        logger.error(f"Task failed for pair ({movie_id_1}, {movie_id_2}). Error: {e}")
-        # The `autoretry_for` decorator will handle re-raising the exception for retries.
-        raise
+        logger.error(
+            f"Task failed for pair ({movie_id_1}, {movie_id_2}). Retrying... Error: {e}"
+        )
+        raise self.retry(exc=e)
 
 
-@celery_app.signals.worker_shutdown.connect
+@worker_shutdown.connect
 def shutdown_neo4j_driver(**kwargs):
     global neo4j_driver
     if neo4j_driver:
