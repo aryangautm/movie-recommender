@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Set
 
-from neo4j import Driver
+from neo4j import Driver, exceptions
 from sqlalchemy import desc
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
@@ -72,3 +72,34 @@ def get_similar_movies_from_graph(
     with driver.session() as session:
         result = session.run(query, id=movie_id, limit=limit)
         return [record.data() for record in result]
+
+
+def increment_user_vote_in_graph(
+    driver: Driver, movie_id_1: int, movie_id_2: int
+) -> bool:
+    """
+    Finds the relationship between two movies and atomically increments the
+    user_votes counter. This is designed to be idempotent.
+    Returns True on success, False on failure (e.g., relationship not found).
+    """
+    # The query will only update the relationship
+    # if it already exists between the two specified nodes.
+    query = """
+    MATCH (a:Movie {tmdb_id: $id1})
+    MATCH (b:Movie {tmdb_id: $id2})
+    // We match the relationship in either direction
+    MERGE (a)-[r:IS_SIMILAR_TO]-(b)
+    SET r.user_votes = coalesce(r.user_votes, 0) + 1
+    RETURN r
+    """
+    try:
+        with driver.session() as session:
+            result = session.run(query, id1=movie_id_1, id2=movie_id_2)
+            # Check if the update actually found and returned a relationship
+            return result.single() is not None
+    except exceptions.ServiceUnavailable:
+        # Re-raise the exception so Celery's retry mechanism can catch it
+        raise
+    except Exception as e:
+        print(f"An unexpected error occurred while incrementing vote: {e}")
+        return False

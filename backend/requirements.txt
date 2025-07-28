@@ -6,3 +6,7 @@ neo4j
 sentence-transformers
 torch
 numpy
+uvicorn
+celery
+redis
+fastapi

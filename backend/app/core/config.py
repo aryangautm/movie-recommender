@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     NEO4J_USER: str
     NEO4J_PASSWORD: str
 
+    REDIS_URL: str
+
     class Config:
         env_file = PROJECT_ROOT / ".env"
         env_file_encoding = "utf-8"
