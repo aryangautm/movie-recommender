@@ -1,4 +1,6 @@
-# Cineko: A Movie Recommender Beyond Ratings
+<p align="center">
+    <h1>Cineko: A Movie Recommender Beyond Ratings</h1>
+</p>
 
 <p align="center">
     <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python Version">

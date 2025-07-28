@@ -1,17 +1,18 @@
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
-from neo4j import Driver
 
-from app.schemas.movie import MovieSearchResult, Movie, SimilarMovie
-from app.crud.crud_movie import (
-    get_similar_movies_from_graph,
-    get_movie_by_id,
-    get_movies_by_ids,
-    search_movies_by_title,
-)
+from fastapi import APIRouter, Depends, HTTPException, Query
+from neo4j import Driver
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.graph import get_graph_driver
+from app.crud.crud_movie import (
+    get_movie_by_id,
+    get_movies_by_ids,
+    get_similar_movies_from_graph,
+    search_movies_by_title,
+)
+from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie
 
 router = APIRouter()
 
