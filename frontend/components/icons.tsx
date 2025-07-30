@@ -41,3 +41,11 @@ export const SpinnerIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
     </svg>
 );
+
+export const LeftArrowInCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+    <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+      <circle cx="16" cy="16" r="15.5" stroke="white" strokeOpacity="0.3"/>
+      <path d="M18 21L13 16L18 11" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+
