@@ -1,7 +1,10 @@
+import json
+import httpx
 from typing import List
-
+import redis.asyncio as redis
 from app.core.database import get_db
 from app.core.graph import get_graph_driver
+from app.core.redis import get_redis_client
 from app.crud.crud_movie import (
     get_movie_by_id,
     get_movies_by_ids,
@@ -12,35 +15,38 @@ from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie
 from fastapi import APIRouter, Depends, HTTPException, Query
 from neo4j import Driver
 from sqlalchemy.orm import Session
+from app.core.config import settings
+from app.core.tmdb_client import tmdb_client
 
 router = APIRouter()
+CACHE_TTL_SECONDS = 86400
 
 
 @router.get("/search", response_model=List[MovieSearchResult])
-def search_movies(
+async def search_movies(
     q: str = Query(..., min_length=3, description="Search query for movie titles"),
     db: Session = Depends(get_db),
 ):
     """
     Search for movies by title.
     """
-    movies = search_movies_by_title(db, query=q)
+    movies = await search_movies_by_title(db, query=q)
     return movies
 
 
 @router.get("/{movie_id}", response_model=Movie)
-def read_movie(movie_id: int, db: Session = Depends(get_db)):
+async def read_movie(movie_id: int, db: Session = Depends(get_db)):
     """
     Get a single movie by its TMDb ID.
     """
-    db_movie = get_movie_by_id(db, movie_id=movie_id)
+    db_movie = await get_movie_by_id(db, movie_id=movie_id)
     if db_movie is None:
         raise HTTPException(status_code=404, detail="Movie not found")
     return db_movie
 
 
 @router.get("/{movie_id}/similar", response_model=List[SimilarMovie])
-def read_similar_movies(
+async def read_similar_movies(
     movie_id: int,
     db: Session = Depends(get_db),
     driver: Driver = Depends(get_graph_driver),
@@ -48,7 +54,7 @@ def read_similar_movies(
     """
     Get a list of similar movies based on AI-powered graph relationships.
     """
-    source_movie = get_movie_by_id(db, movie_id=movie_id)
+    source_movie = await get_movie_by_id(db, movie_id=movie_id)
     if not source_movie:
         raise HTTPException(status_code=404, detail="Source movie not found")
 
@@ -58,7 +64,7 @@ def read_similar_movies(
 
     similar_movie_ids = [movie["tmdb_id"] for movie in similar_movies_data]
 
-    similar_movie_objects = get_movies_by_ids(db, movie_ids=similar_movie_ids)
+    similar_movie_objects = await get_movies_by_ids(db, movie_ids=similar_movie_ids)
 
     movie_map = {movie.id: movie for movie in similar_movie_objects}
 
@@ -69,7 +75,7 @@ def read_similar_movies(
             similar_movie = SimilarMovie(
                 **movie_obj.__dict__,
                 ai_score=data["ai_score"],
-                user_votes=data["user_votes"]
+                user_votes=data["user_votes"],
             )
             response.append(similar_movie)
 

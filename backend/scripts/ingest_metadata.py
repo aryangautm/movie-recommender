@@ -1,6 +1,7 @@
 import json
 import os
 import sys
+from datetime import datetime
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -11,12 +12,12 @@ from urllib3.util.retry import Retry
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.core.config import settings
-from app.core.database import Base, SessionLocal, engine
+from app.core.database import Base, AsyncSessionLocal, async_engine
 from app.crud import crud_movie
 
 # --- CONFIGURABLE FILTERS ---
-ORIGINAL_LANGUAGE = "te"
-ORIGIN_COUNTRY = "IN"
+ORIGINAL_LANGUAGE = "en"
+ORIGIN_COUNTRY = "US"
 
 # --- API CONSTANTS ---
 TMDB_API_URL = "https://api.themoviedb.org/3"
@@ -57,8 +58,8 @@ def discover_initial_movie_data(session: requests.Session):
         "api_key": settings.TMDB_API_KEY,
         "sort_by": "popularity.desc",
         "page": 1,
-        "with_original_language": ORIGINAL_LANGUAGE,
-        "with_origin_country": ORIGIN_COUNTRY,
+        "with_original_language": ORIGINAL_LANGUAGE or None,
+        "with_origin_country": ORIGIN_COUNTRY or None,
     }
     response = session.get(f"{TMDB_API_URL}/discover/movie", params=params)
     response.raise_for_status()
@@ -113,24 +114,18 @@ def fetch_all_movies_from_api(session: requests.Session) -> list:
                     # Mark this ID as seen for this run
                     seen_ids.add(movie_id)
 
-                    release_date = movie_data.get("release_date")
-                    year = (
-                        int(release_date.split("-")[0])
-                        if release_date and "-" in release_date
-                        else None
-                    )
-
                     movie = {
                         "id": movie_data.get("id"),
                         "title": movie_data.get("title"),
                         "overview": movie_data.get("overview"),
-                        "release_year": year,
+                        "release_date": movie_data.get("release_date"),
                         "poster_path": movie_data.get("poster_path"),
                         "genres": [
                             {"id": gid, "name": genre_map.get(gid)}
                             for gid in movie_data.get("genre_ids", [])
                             if gid in genre_map
                         ],
+                        "backdrop_path": movie_data.get("backdrop_path"),
                     }
                     all_movies.append(movie)
             except requests.RequestException as e:
@@ -143,7 +138,7 @@ def fetch_all_movies_from_api(session: requests.Session) -> list:
     return all_movies
 
 
-def store_movies_in_db(movies: list):
+async def store_movies_in_db(movies: list):
     """
     Takes a list of movies and upserts them into the database in batches.
     Includes exception handling for database operations.
@@ -153,16 +148,17 @@ def store_movies_in_db(movies: list):
         return
 
     print(f"\nPreparing to upsert {len(movies)} movies into the database...")
-    db = SessionLocal()
+    db = AsyncSessionLocal()
     try:
-        Base.metadata.create_all(bind=engine)
+        async with async_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
 
         total_movies_processed = 0
         with tqdm(total=len(movies), desc="Upserting to DB") as pbar:
             for i in range(0, len(movies), DB_BATCH_SIZE):
                 batch = movies[i : i + DB_BATCH_SIZE]
                 try:
-                    crud_movie.bulk_upsert_movies(db, batch)
+                    await crud_movie.bulk_upsert_movies(db, batch)
                     total_movies_processed += len(batch)
                     pbar.update(len(batch))
                 except SQLAlchemyError as e:
@@ -170,16 +166,16 @@ def store_movies_in_db(movies: list):
                         f"\nDatabase error occurred during batch {i//DB_BATCH_SIZE + 1}. Rolling back."
                     )
                     print(f"Error: {e}")
-                    db.rollback()  # Rollback the failed transaction
+                    await db.rollback()  # Rollback the failed transaction
                     raise
 
         print(f"\nSuccessfully processed and stored {total_movies_processed} movies.")
 
     finally:
-        db.close()
+        await db.close()
 
 
-def main():
+async def main():
     """Main orchestration function."""
 
     # --- Stage 1: Fetching data from API ---
@@ -206,10 +202,21 @@ def main():
         print(f"Error writing to backup file: {e}")
         # We can still proceed to the database stage even if backup fails.
 
+    # Convert release_date strings to date objects
+    for movie in all_movies:
+        release_date_str = movie.get("release_date")
+        if release_date_str and isinstance(release_date_str, str):
+            try:
+                movie["release_date"] = datetime.fromisoformat(release_date_str).date()
+            except ValueError:
+                movie["release_date"] = None
+        else:
+            movie["release_date"] = None
+
     # --- Stage 3: Storing data in database ---
     print(f"\n--- Stage 3: Storing movies in PostgreSQL database ---")
     try:
-        store_movies_in_db(all_movies)
+        await store_movies_in_db(all_movies)
     except Exception as e:
         print(
             f"\nAn unrecoverable error occurred during the database storage phase: {e}"
@@ -221,6 +228,8 @@ def main():
 
 
 if __name__ == "__main__":
+    import asyncio
+
     print("--- Starting Metadata Ingestion Process ---")
-    main()
+    asyncio.run(main())
     print("--- Metadata Ingestion Process Finished ---")

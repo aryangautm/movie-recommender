@@ -3,22 +3,24 @@ from typing import Any, Dict, List, Set
 from neo4j import Driver, exceptions
 from sqlalchemy import desc
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from ..models.movie import Movie
+from app.schemas.movie import MovieSearchResult, Genre
 
 
-def get_existing_movie_ids(db: Session) -> Set[int]:
-    existing_ids = db.query(Movie.id).all()
-    return {id_tuple[0] for id_tuple in existing_ids}
+async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
+    result = await db.execute(select(Movie.id))
+    return {id_tuple[0] for id_tuple in result.all()}
 
 
-def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
-    db.bulk_insert_mappings(Movie, movies)
-    db.commit()
+async def bulk_create_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
+    db.add_all([Movie(**movie) for movie in movies])
+    await db.commit()
 
 
-def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
+async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
     """
     Performs a bulk "upsert" (insert or update) of movies into the database.
     If a movie with the same ID already exists, it will be updated.
@@ -35,25 +37,35 @@ def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
 
     upsert_stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_dict)
 
-    db.execute(upsert_stmt)
-    db.commit()
+    await db.execute(upsert_stmt)
+    await db.commit()
 
 
-def get_movie_by_id(db: Session, movie_id: int) -> Movie | None:
+async def get_movie_by_id(db: AsyncSession, movie_id: int) -> Movie | None:
     """Fetches a single movie by its ID from PostgreSQL."""
-    return db.query(Movie).filter(Movie.id == movie_id).first()
+    result = await db.execute(select(Movie).filter(Movie.id == movie_id))
+    return result.scalars().first()
 
 
-def get_movies_by_ids(db: Session, movie_ids: List[int]) -> List[Movie]:
+async def get_movies_by_ids(db: AsyncSession, movie_ids: List[int]) -> List[Movie]:
     """Fetches multiple movies by their IDs from PostgreSQL."""
     if not movie_ids:
         return []
-    return db.query(Movie).filter(Movie.id.in_(movie_ids)).all()
+    result = await db.execute(select(Movie).filter(Movie.id.in_(movie_ids)))
+    return result.scalars().all()
 
 
-def search_movies_by_title(db: Session, query: str, limit: int = 20) -> List[Movie]:
-    """Searches for movies by title in PostgreSQL (case-insensitive)."""
-    return db.query(Movie).filter(Movie.title.ilike(f"%{query}%")).limit(limit).all()
+async def search_movies_by_title(
+    db: AsyncSession, query: str, limit: int = 20
+) -> List[MovieSearchResult]:
+    """
+    Searches for movies by title and returns data structured for the
+    MovieSearchResult schema.
+    """
+    stmt = select(Movie).filter(Movie.title.ilike(f"%{query}%")).limit(limit)
+    result = await db.execute(stmt)
+
+    return result.scalars().all()
 
 
 def get_similar_movies_from_graph(

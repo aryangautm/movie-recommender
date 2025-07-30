@@ -10,3 +10,5 @@ uvicorn
 celery
 redis
 fastapi
+alembic
+asyncpg
