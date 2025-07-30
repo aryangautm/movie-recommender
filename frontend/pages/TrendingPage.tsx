@@ -1,15 +1,15 @@
-
 import React, { useState } from 'react';
 import ContentTypeToggle, { ContentType } from '../components/ContentTypeToggle';
 import { TrendingIcon } from '../components/icons';
 import TrendingCard from '../components/TrendingCard';
-import { MovieResult } from '../App';
+import { Movie } from '../App';
 
 interface TrendingPageProps {
-  trendingData: MovieResult[];
+  trendingData: Movie[];
+  onSelectMovie: (movie: Movie) => void;
 }
 
-const TrendingPage: React.FC<TrendingPageProps> = ({ trendingData }) => {
+const TrendingPage: React.FC<TrendingPageProps> = ({ trendingData, onSelectMovie }) => {
   const [activeType, setActiveType] = useState<ContentType>('movie');
   
   // In a real app, this would filter based on type
@@ -30,7 +30,7 @@ const TrendingPage: React.FC<TrendingPageProps> = ({ trendingData }) => {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
         {itemsToShow.map(item => (
-          <TrendingCard key={item.id} item={item} />
+          <TrendingCard key={item.id} item={item} onSelectMovie={onSelectMovie} />
         ))}
       </div>
     </div>

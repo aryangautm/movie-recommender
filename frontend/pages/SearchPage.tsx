@@ -1,14 +1,15 @@
 import React from 'react';
 import ClippingForm from '../components/ClippingForm';
 import SearchResults from '../components/SearchResults';
-import { MovieResult } from '../App';
+import { Movie } from '../App';
 
 interface SearchPageProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
   isLoading: boolean;
-  searchResults: MovieResult[];
+  searchResults: Movie[];
   isSearchActive: boolean;
+  onSelectMovie: (movie: Movie) => void;
 }
 
 const SearchPage: React.FC<SearchPageProps> = ({
@@ -17,6 +18,7 @@ const SearchPage: React.FC<SearchPageProps> = ({
   isLoading,
   searchResults,
   isSearchActive,
+  onSelectMovie,
 }) => {
   return (
     <div className="flex flex-col items-center justify-center flex-grow p-4">
@@ -38,6 +40,7 @@ const SearchPage: React.FC<SearchPageProps> = ({
           results={searchResults}
           isLoading={isLoading}
           show={isSearchActive}
+          onSelectMovie={onSelectMovie}
         />
       </div>
     </div>

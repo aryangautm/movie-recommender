@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { MovieResult } from '../App';
+import { Movie } from '../App';
 import SearchResultCard from './SearchResultCard';
 import { SpinnerIcon } from './icons';
 
 interface SearchResultsProps {
-  results: MovieResult[];
+  results: Movie[];
   isLoading: boolean;
   show: boolean;
+  onSelectMovie: (movie: Movie) => void;
 }
 
-const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show }) => {
+const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show, onSelectMovie }) => {
   const [shouldRender, setShouldRender] = useState(show);
 
   useEffect(() => {
@@ -44,7 +45,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show 
         {!isLoading && results.length > 0 && (
           <div className="space-y-3">
             {results.map(movie => (
-              <SearchResultCard key={movie.id} movie={movie} />
+              <SearchResultCard key={movie.id} movie={movie} onSelectMovie={onSelectMovie} />
             ))}
           </div>
         )}
