@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { WavingHandIcon } from './components/icons';
 import HeaderNavigation, { NavItem } from './components/HeaderNavigation';
@@ -25,6 +24,10 @@ const mockMovieData: Movie[] = [
   { id: 4, title: 'Parasite', overview: 'Greed and class discrimination threaten the newly formed symbiotic relationship...', year: 2019, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Parasite', releaseDate: 'October 11, 2019', contentType: 'movie', runtime: '2h 12m', genres: ['Comedy', 'Drama', 'Thriller'] },
   { id: 5, title: 'The Dark Knight', overview: 'When the menace known as the Joker wreaks havoc and chaos on the people of Gotham...', year: 2008, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=The+Dark+Knight', releaseDate: 'July 18, 2008', contentType: 'movie', runtime: '2h 32m', genres: ['Action', 'Crime', 'Drama'] },
   { id: 11, title: 'Happy Gilmore 2', overview: "Happy Gilmore isn't done with golf — not by a long shot. Since his retirement after his first Tour Championship win, Gilmore returns to finance his daughter's ballet classes.", year: 2025, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Happy+Gilmore+2', releaseDate: 'July 25, 2025', contentType: 'movie', runtime: '1h 51m', genres: ['Drama', 'Fantasy'] },
+  { id: 12, title: 'The Shawshank Redemption', overview: 'Two imprisoned men bond over a number of years, finding solace and eventual redemption through acts of common decency.', year: 1994, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Shawshank', releaseDate: 'September 23, 1994', contentType: 'movie', runtime: '2h 22m', genres: ['Drama'] },
+  { id: 13, title: 'The Godfather', overview: 'The aging patriarch of an organized crime dynasty transfers control of his clandestine empire to his reluctant son.', year: 1972, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Godfather', releaseDate: 'March 24, 1972', contentType: 'movie', runtime: '2h 55m', genres: ['Crime', 'Drama'] },
+  { id: 14, title: 'The Green Mile', overview: 'The lives of guards on Death Row are affected by one of their charges: a black man accused of child murder and rape, yet who has a mysterious gift.', year: 1999, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Green+Mile', releaseDate: 'December 10, 1999', contentType: 'movie', runtime: '3h 9m', genres: ['Crime', 'Drama', 'Fantasy'] },
+  { id: 15, title: 'Schindler\'s List', overview: 'In German-occupied Poland during World War II, industrialist Oskar Schindler gradually becomes concerned for his Jewish workforce after witnessing their persecution by the Nazis.', year: 1993, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Schindler', releaseDate: 'February 4, 1994', contentType: 'movie', runtime: '3h 15m', genres: ['Biography', 'Drama', 'History'] },
 ];
 
 const trendingData: Movie[] = [
@@ -87,7 +90,7 @@ const App: React.FC = () => {
   };
 
   if (selectedMovie) {
-    return <FocusPage movie={selectedMovie} onGoHome={handleGoHome} />;
+    return <FocusPage movie={selectedMovie} onGoHome={handleGoHome} onSelectMovie={handleSelectMovie} allMovies={mockMovieData} />;
   }
 
   return (

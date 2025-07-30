@@ -1,14 +1,49 @@
-
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Movie } from '../App';
 import { LeftArrowInCircleIcon } from '../components/icons';
+import SuggestionCard from '../components/SuggestionCard';
 
 interface FocusPageProps {
   movie: Movie;
   onGoHome: () => void;
+  onSelectMovie: (movie: Movie) => void;
+  allMovies: Movie[];
 }
 
-const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome }) => {
+const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie, allMovies }) => {
+  const [suggestions, setSuggestions] = useState<Movie[]>([]);
+
+  const fetchSuggestions = useCallback(() => {
+    const similar = allMovies
+      .filter(m => m.id !== movie.id)
+      .sort(() => 0.5 - Math.random())
+      .slice(0, 4);
+    setSuggestions(similar);
+  }, [movie.id, allMovies]);
+
+  useEffect(() => {
+    fetchSuggestions();
+    window.scrollTo(0, 0);
+  }, [movie.id, fetchSuggestions]);
+
+
+  const SuggestionsContent = (
+    <>
+      <h2 className="text-2xl font-semibold mb-6">Similar Suggestions</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
+        {suggestions.map((suggestion, index) => (
+          <SuggestionCard
+            key={suggestion.id}
+            movie={suggestion}
+            index={index + 1}
+            onSelectMovie={onSelectMovie}
+            onUpvote={fetchSuggestions}
+          />
+        ))}
+      </div>
+    </>
+  );
+
   return (
     <div className="relative min-h-screen font-sans text-white overflow-y-auto bg-gradient-to-b from-[#110E1B] to-[#25142d]">
       {/* Back to Home Button */}
@@ -20,12 +55,13 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome }) => {
       </header>
       
       <main className="w-full px-4 sm:px-6 lg:px-8 pt-28 pb-12">
-        <div className="w-full max-w-7xl mx-auto border border-white/10 rounded-3xl p-8 backdrop-blur-md bg-white/5 shadow-2xl">
-          <div className="flex flex-col md:flex-row gap-8 lg:gap-12">
+        <div className="w-full max-w-7xl mx-auto border border-white/10 rounded-3xl p-6 sm:p-8 backdrop-blur-md bg-white/5 shadow-2xl">
+          <div className="flex flex-col sm:flex-row md:flex-row gap-8 lg:gap-12">
             {/* Poster */}
-            <div className="w-full md:w-1/3 flex-shrink-0">
+            <div className="w-1/2 sm:w-1/3 flex-shrink-0 mx-auto md:mx-0">
                <div className="aspect-[2/3] w-full border border-white/10 rounded-2xl flex items-center justify-center bg-black/20">
-                 {/* This is a placeholder for the movie poster image, as seen in the design reference */}
+                 {/* Placeholder for the movie poster image */}
+                 <img src={movie.posterUrl.replace('128x192', '300x450')} alt={`${movie.title} poster`} className="w-full h-full object-cover rounded-2xl" />
                </div>
             </div>
 
@@ -57,6 +93,11 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome }) => {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Suggestions for MD and up */}
+          <div className="block mt-8 pt-8 border-t border-white/10">
+            {SuggestionsContent}
           </div>
         </div>
       </main>
