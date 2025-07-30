@@ -18,7 +18,7 @@ const TrendingPage: React.FC<TrendingPageProps> = ({ trendingData }) => {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">        
       <div className="flex items-center gap-2 mb-8">
-        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight bg-gradient-to-b from-white to-gray-400 bg-clip-text text-transparent">
+        <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold leading-tight py-2 bg-gradient-to-b from-white to-gray-400 bg-clip-text text-transparent">
           Trending
         </h1>
         <TrendingIcon className="w-10 h-10 text-white" />
