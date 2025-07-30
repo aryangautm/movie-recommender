@@ -1,0 +1,5 @@
+{
+  "name": "Movie(s)Network",
+  "description": "An application to search for similar movies and tv shows based on a given title.",
+  "requestFramePermissions": []
+}
