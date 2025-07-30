@@ -1,11 +1,15 @@
 import logging
-
+import asyncio
 from celery import Celery
 from celery.signals import worker_shutdown
 from neo4j import Driver, GraphDatabase
-
+from typing import List, Dict, Any
+from .core.database import AsyncSessionLocal, async_engine, Base
+from .crud import crud_movie as movie_crud
+from datetime import datetime
 from .core.config import settings
 from .crud import crud_movie
+from app.core.tmdb_client import tmdb_client
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -72,3 +76,64 @@ def shutdown_neo4j_driver(**kwargs):
     if neo4j_driver:
         neo4j_driver.close()
         logger.info("Neo4j driver for Celery worker shut down.")
+
+
+@celery_app.task(
+    name="tasks.ingest_new_movies",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 2, "countdown": 60},
+)
+def ingest_new_movies(movies_data: List[Dict[str, Any]]):
+    """
+    Celery task to ingest a list of new movies into the PostgreSQL database.
+    This is a synchronous task that safely runs an async block for DB operations.
+    """
+    if not movies_data:
+        logger.info("ingest_new_movies task received with no data. Exiting.")
+        return
+
+    logger.info(f"Received task to ingest {len(movies_data)} new movies.")
+
+    # The synchronous part of the task prepares the data.
+    genre_map = tmdb_client.get_genre_map()
+    if not genre_map:
+        logger.error("Could not fetch genre map. Aborting ingestion task.")
+        raise Exception("Failed to get genre map for movie ingestion.")
+
+    movies_to_create = []
+    for movie_data in movies_data:
+        genres = [
+            {"id": gid, "name": genre_map.get(gid, "Unknown")}
+            for gid in movie_data.get("genre_ids", [])
+        ]
+        release_date_str = movie_data.get("release_date")
+        movies_to_create.append(
+            {
+                "id": movie_data.get("id"),
+                "title": movie_data.get("title"),
+                "overview": movie_data.get("overview"),
+                "release_date": datetime.fromisoformat(release_date_str).date(),
+                "poster_path": movie_data.get("poster_path"),
+                "backdrop_path": movie_data.get("backdrop_path"),
+                "genres": genres,
+            }
+        )
+
+    # This function defines the async database work.
+    async def run_database_operations():
+        logger.info(f"Connecting to async DB to ingest {len(movies_to_create)} movies.")
+        async with AsyncSessionLocal() as db:
+            try:
+                await crud_movie.bulk_upsert_movies(db, movies_to_create)
+                logger.info("Async database ingestion successful.")
+            except Exception as e:
+                # The context manager handles rollback automatically.
+                logger.error(f"Async database ingestion failed: {e}")
+                raise
+
+    # asyncio.run() executes the async block and waits for it to complete.
+    try:
+        asyncio.run(run_database_operations())
+    except Exception as e:
+        # Re-raise the exception to trigger Celery's retry mechanism.
+        raise e

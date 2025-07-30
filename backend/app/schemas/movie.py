@@ -42,3 +42,10 @@ class MovieSearchResult(BaseModel):
 class SimilarMovie(Movie):
     ai_score: float
     user_votes: int
+
+
+class TrendingMoviesPage(BaseModel):
+    page: int
+    results: List[Movie]  # We can reuse our existing Movie schema
+    total_pages: int
+    total_results: int

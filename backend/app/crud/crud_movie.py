@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Set
 
 from neo4j import Driver, exceptions
-from sqlalchemy import desc
+from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -16,7 +16,9 @@ async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
 
 
 async def bulk_create_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
-    db.add_all([Movie(**movie) for movie in movies])
+    if not movies:
+        return
+    await db.execute(insert(Movie), movies)
     await db.commit()
 
 
@@ -115,3 +117,17 @@ def increment_user_vote_in_graph(
     except Exception as e:
         print(f"An unexpected error occurred while incrementing vote: {e}")
         return False
+
+
+async def filter_existing_movie_ids(db: AsyncSession, movie_ids: List[int]) -> Set[int]:
+    """
+    Takes a list of movie IDs and returns a set containing only the IDs
+    that are NOT already in the database.
+    """
+    if not movie_ids:
+        return set()
+
+    result = await db.execute(select(Movie.id).filter(Movie.id.in_(movie_ids)))
+    existing_ids = result.scalars().all()
+
+    return set(movie_ids) - set(existing_ids)

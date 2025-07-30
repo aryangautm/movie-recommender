@@ -1,26 +1,59 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { Movie } from '../App';
-import { LeftArrowInCircleIcon } from '../components/icons';
+import { LeftArrowInCircleIcon, SpinnerIcon } from '../components/icons';
 import SuggestionCard from '../components/SuggestionCard';
 
 interface FocusPageProps {
   movie: Movie;
   onGoHome: () => void;
   onSelectMovie: (movie: Movie) => void;
-  allMovies: Movie[];
 }
 
+const BACKEND_BASE_URL = 'http://localhost:8000';
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
 
-const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie, allMovies }) => {
+const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie }) => {
   const [suggestions, setSuggestions] = useState<Movie[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchSuggestions = useCallback(() => {
-    const similar = allMovies
-      .filter(m => m.id !== movie.id)
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 4);
-    setSuggestions(similar);
-  }, [movie.id, allMovies]);
+  const fetchSuggestions = useCallback(async () => {
+    setIsLoadingSuggestions(true);
+    setError(null);
+    try {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/${movie.id}/similar`);
+      if (!response.ok) {
+        throw new Error('Network response was not ok');
+      }
+      const data = await response.json();
+
+      const formattedSuggestions: Movie[] = data.slice(0, 4).map((item: any) => ({
+        id: item.id,
+        title: item.title,
+        year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
+        posterUrl: item.poster_path
+          ? `${IMAGES_BASE_URL}${item.poster_path}`
+          : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
+        backdropUrl: item.backdrop_path
+          ? `${IMAGES_BASE_URL}${item.backdrop_path}`
+          : null,
+        overview: item.overview || `Overview for "${item.title}" is not available.`,
+        releaseDate: String(item.release_date || 'N/A'),
+        contentType: 'movie',
+        runtime: 'N/A',
+        genres: item.genres?.map((genre: any) => genre.name) || [],
+      }));
+
+      setSuggestions(formattedSuggestions);
+    } catch (err) {
+      console.error("Failed to fetch similar movies:", err);
+      setError("Couldn't load suggestions. Please try again later.");
+      setSuggestions([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  }, [movie.id]);
 
   useEffect(() => {
     fetchSuggestions();
@@ -30,17 +63,29 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie, a
   const SuggestionsContent = (
     <>
       <h2 className="text-2xl font-semibold mb-6">Similar Suggestions</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
-        {suggestions.map((suggestion, index) => (
-          <SuggestionCard
-            key={suggestion.id}
-            movie={suggestion}
-            index={index + 1}
-            onSelectMovie={onSelectMovie}
-            onUpvote={fetchSuggestions}
-          />
-        ))}
-      </div>
+      {isLoadingSuggestions ? (
+        <div className="flex justify-center items-center py-10">
+          <SpinnerIcon className="w-8 h-8 text-white" />
+        </div>
+      ) : error ? (
+        <div className="text-center py-10 text-red-400">{error}</div>
+      ) : suggestions.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
+          {suggestions.map((suggestion, index) => (
+            <SuggestionCard
+              key={suggestion.id}
+              movie={suggestion}
+              index={index + 1}
+              onSelectMovie={onSelectMovie}
+              onUpvote={fetchSuggestions}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-10 text-gray-400">
+          No similar suggestions found.
+        </div>
+      )}
     </>
   );
 
