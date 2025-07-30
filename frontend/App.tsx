@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { WavingHandIcon } from './components/icons';
 import HeaderNavigation, { NavItem } from './components/HeaderNavigation';
@@ -11,11 +12,15 @@ export interface Movie {
   overview: string;
   year: number;
   posterUrl: string;
+  backdropUrl?: string | null;
   releaseDate: string;
   contentType: 'movie' | 'tvShow';
   runtime: string;
   genres: string[];
 }
+
+const BACKEND_BASE_URL = 'http://localhost:8000';
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
 
 const mockMovieData: Movie[] = [
   { id: 1, title: 'Inception', overview: 'A thief who steals corporate secrets through the use of dream-sharing technology...', year: 2010, posterUrl: 'https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=Inception', releaseDate: 'July 16, 2010', contentType: 'movie', runtime: '2h 28m', genres: ['Action', 'Sci-Fi', 'Thriller'] },
@@ -66,19 +71,50 @@ const App: React.FC = () => {
   }, [searchQuery]);
 
   useEffect(() => {
-    if (debouncedQuery.length >= 3) {
-      setIsLoading(true);
-      setTimeout(() => {
-        const filteredResults = mockMovieData.filter(movie =>
-          movie.title.toLowerCase().includes(debouncedQuery.toLowerCase())
-        );
-        setSearchResults(filteredResults);
-        setIsLoading(false);
-      }, 800);
-    } else {
+    if (debouncedQuery.length < 3) {
       setSearchResults([]);
       setIsLoading(false);
+      return;
     }
+
+    const fetchSearchResults = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
+        if (!response.ok) {
+          throw new Error('Network response was not ok');
+        }
+        const data = await response.json();
+
+        const formattedResults: Movie[] = data.map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          year: item.release_date ? new Date(item.release_date).getFullYear() : 'N/A',
+          posterUrl: item.poster_path
+            ? `${IMAGES_BASE_URL}${item.poster_path}`
+            : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
+          backdropUrl: item.backdrop_path
+            ? `${IMAGES_BASE_URL}${item.backdrop_path}`
+            : null,
+          overview: item.overview
+            ? item.overview
+            : `Overview for "${item.title}" is not available via search.`,
+          releaseDate: String(item.release_date),
+          contentType: 'movie',
+          runtime: 'N/A',
+          genres: item.genres.map((genre: any) => genre.name) || []
+        }));
+
+        setSearchResults(formattedResults);
+      } catch (error) {
+        console.error("Failed to fetch search results:", error);
+        setSearchResults([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchSearchResults();
   }, [debouncedQuery]);
 
   const handleSelectMovie = (movie: Movie) => {
