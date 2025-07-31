@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Callable
 
 from neo4j import Driver, exceptions
 from sqlalchemy import insert
@@ -22,6 +22,10 @@ async def bulk_create_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
     await db.commit()
 
 
+def chunker(seq, size):
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
 async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
     """
     Performs a bulk "upsert" (insert or update) of movies into the database.
@@ -31,16 +35,27 @@ async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
     if not movies:
         return
 
-    stmt = insert(Movie.__table__).values(movies)
+    BATCH_SIZE = 1000  # This will create about 13,000 parameters per batch, well under the 32k limit.
 
-    # Define what to do on conflict (i.e., when a movie ID already exists)
-    # We update all columns except for the 'id' itself.
-    update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
+    # Process the movies in batches
+    for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
+        print(f"Processing batch {i+1} with {len(movie_batch)} movies...")
+        try:
+            # The core upsert logic is the same, but applied to the BATCH
+            stmt = insert(Movie.__table__).values(movie_batch)
 
-    upsert_stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_dict)
+            update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
 
-    await db.execute(upsert_stmt)
-    await db.commit()
+            upsert_stmt = stmt.on_conflict_do_update(
+                index_elements=["id"], set_=update_dict
+            )
+
+            await db.execute(upsert_stmt)
+            await db.commit()  # Commit after each successful batch
+        except Exception as e:
+            with open("error_log.txt", "a") as error_file:
+                error_file.write(f"Error during bulk upsert: {e}\n")
+            await db.rollback()
 
 
 async def get_movie_by_id(db: AsyncSession, movie_id: int) -> Movie | None:
@@ -131,3 +146,12 @@ async def filter_existing_movie_ids(db: AsyncSession, movie_ids: List[int]) -> S
     existing_ids = result.scalars().all()
 
     return set(movie_ids) - set(existing_ids)
+
+
+async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> Set[int]:
+    """
+    Efficiently fetches all existing movie IDs from the database.
+    """
+    async with db_session_factory() as db:
+        result = await db.execute(select(Movie.id).filter(Movie.vote_count.is_(None)))
+        return {row[0] for row in result.all()}

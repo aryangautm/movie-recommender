@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import JSON, Column, Integer, String, Text, Date
+from sqlalchemy import JSON, Column, Integer, String, Text, Date, Float
 
 
 class Movie(Base):
@@ -16,3 +16,9 @@ class Movie(Base):
     genres = Column(JSON, nullable=True)
     release_date = Column(Date, nullable=True)
     backdrop_path = Column(String, nullable=True)
+    keywords = Column(JSON, nullable=True)
+    director = Column(JSON, nullable=True)  # Storing as JSON to hold name and ID
+    cast = Column(JSON, nullable=True)
+    collection = Column(JSON, nullable=True)
+    vote_count = Column(Integer, default=0)
+    vote_average = Column(Float, default=0.0)

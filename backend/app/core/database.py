@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 
 from .config import settings
 
-engine = create_engine(settings.DATABASE_URL)
+sync_engine = create_engine(settings.SYNC_DATABASE_URL)
 
 async_engine = create_async_engine(settings.DATABASE_URL)
 
@@ -13,7 +13,7 @@ AsyncSessionLocal = sessionmaker(
     bind=async_engine, class_=AsyncSession, expire_on_commit=False
 )
 
-SessionLocal = sessionmaker(bind=engine)
+SessionLocal = sessionmaker(bind=sync_engine)
 
 Base = declarative_base()
 

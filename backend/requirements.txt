@@ -12,3 +12,5 @@ redis
 fastapi
 alembic
 asyncpg
+httpx
+scikit-learn
