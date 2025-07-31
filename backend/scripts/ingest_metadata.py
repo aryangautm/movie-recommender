@@ -1,226 +1,211 @@
-import json
 import os
 import sys
-
-import requests
-from requests.adapters import HTTPAdapter
-from sqlalchemy.exc import SQLAlchemyError
+import json
+import asyncio
+import httpx
 from tqdm import tqdm
-from urllib3.util.retry import Retry
+from typing import List, Dict, Any, Set
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
 from app.core.config import settings
-from app.core.database import Base, SessionLocal, engine
+from app.core.database import AsyncSessionLocal
 from app.crud import crud_movie
 
-# --- CONFIGURABLE FILTERS ---
-ORIGINAL_LANGUAGE = "te"
-ORIGIN_COUNTRY = "IN"
-
-# --- API CONSTANTS ---
+# --- CONFIGURATION ---
 TMDB_API_URL = "https://api.themoviedb.org/3"
+# Fetch more pages to get a wider variety of movies
 API_MAX_PAGE_LIMIT = 500
-DB_BATCH_SIZE = 1000
-
+# Limit concurrent requests to TMDb to avoid getting rate-limited
+MAX_CONCURRENT_REQUESTS = 10
+# Filter out movies with very few votes to improve data quality
+MINIMUM_VOTE_COUNT = 50
+# Path for local data backup
 BACKUP_FILE_PATH = "scripts/movies_backup.json"
 
 
-def create_resilient_session() -> requests.Session:
-    session = requests.Session()
-    retry_strategy = Retry(
-        total=5,
-        backoff_factor=1,
-        status_forcelist=[429, 500, 502, 503, 504],
-        allowed_methods=["HEAD", "GET", "OPTIONS"],
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
-    session.mount("https://", adapter)
-    session.mount("http://", adapter)
-    return session
-
-
-def get_genre_map(session: requests.Session):
-    url = f"{TMDB_API_URL}/genre/movie/list"
-    params = {"api_key": settings.TMDB_API_KEY}
-    response = session.get(url, params=params)
-    response.raise_for_status()
-    genres = response.json().get("genres", [])
-    return {genre["id"]: genre["name"] for genre in genres}
-
-
-def discover_initial_movie_data(session: requests.Session):
-    print(
-        f"Discovering movies for language='{ORIGINAL_LANGUAGE}' and country='{ORIGIN_COUNTRY}'..."
-    )
-    params = {
-        "api_key": settings.TMDB_API_KEY,
-        "sort_by": "popularity.desc",
-        "page": 1,
-        "with_original_language": ORIGINAL_LANGUAGE,
-        "with_origin_country": ORIGIN_COUNTRY,
-    }
-    response = session.get(f"{TMDB_API_URL}/discover/movie", params=params)
-    response.raise_for_status()
-    data = response.json()
-    return data.get("total_pages", 0), data.get("total_results", 0)
-
-
-def fetch_all_movies_from_api(session: requests.Session) -> list:
+async def discover_movie_ids(client: httpx.AsyncClient) -> Set[int]:
     """
-    Fetches all movie data from the API and returns a de-duplicated list of dicts.
+    Stage 1: Quickly discover a large set of movie IDs from the /discover endpoint.
     """
-    total_pages_api, total_results_api = discover_initial_movie_data(session)
-    pages_to_fetch = min(total_pages_api, API_MAX_PAGE_LIMIT)
+    print(f"Discovering up to {API_MAX_PAGE_LIMIT} pages of movie IDs...")
+    discovered_ids = set()
 
-    print(
-        f"TMDb reports {total_results_api} results. We will fetch from {pages_to_fetch} pages."
-    )
-    if pages_to_fetch == 0:
-        return []
+    tasks = []
+    for page in range(1, API_MAX_PAGE_LIMIT + 1):
+        params = {
+            "api_key": settings.TMDB_API_KEY,
+            "sort_by": "popularity.desc",
+            "page": page,
+            "include_adult": False,
+            "vote_count.gte": MINIMUM_VOTE_COUNT,  # Only get movies with a decent number of votes
+        }
+        tasks.append(client.get(f"{TMDB_API_URL}/discover/movie", params=params))
 
-    genre_map = get_genre_map(session)
-    all_movies = []
+    for response in tqdm(
+        asyncio.as_completed(tasks), total=len(tasks), desc="Discovering IDs"
+    ):
+        try:
+            res = await response
+            res.raise_for_status()
+            for movie in res.json().get("results", []):
+                if movie.get("id"):
+                    discovered_ids.add(movie["id"])
+        except httpx.HTTPStatusError as e:
+            print(f"Discovery API Error: {e.response.status_code} on page. Skipping.")
+        except Exception as e:
+            ...
+            # print(f"An error occurred during discovery: {e}. Skipping.")
 
-    # This prevents sending duplicate IDs in a single batch to the database.
-    seen_ids = set()
-
-    with tqdm(total=pages_to_fetch, desc="Fetching Pages") as pbar:
-        for page in range(1, pages_to_fetch + 1):
-            try:
-                response = session.get(
-                    f"{TMDB_API_URL}/discover/movie",
-                    params={
-                        "api_key": settings.TMDB_API_KEY,
-                        "sort_by": "popularity.desc",
-                        "page": page,
-                        "with_original_language": ORIGINAL_LANGUAGE,
-                        "with_origin_country": ORIGIN_COUNTRY,
-                    },
-                )
-                response.raise_for_status()
-
-                for movie_data in response.json().get("results", []):
-                    movie_id = movie_data.get("id")
-
-                    if (
-                        not movie_id
-                        or not movie_data.get("overview")
-                        or movie_id in seen_ids
-                    ):
-                        continue
-
-                    # Mark this ID as seen for this run
-                    seen_ids.add(movie_id)
-
-                    release_date = movie_data.get("release_date")
-                    year = (
-                        int(release_date.split("-")[0])
-                        if release_date and "-" in release_date
-                        else None
-                    )
-
-                    movie = {
-                        "id": movie_data.get("id"),
-                        "title": movie_data.get("title"),
-                        "overview": movie_data.get("overview"),
-                        "release_year": year,
-                        "poster_path": movie_data.get("poster_path"),
-                        "genres": [
-                            {"id": gid, "name": genre_map.get(gid)}
-                            for gid in movie_data.get("genre_ids", [])
-                            if gid in genre_map
-                        ],
-                    }
-                    all_movies.append(movie)
-            except requests.RequestException as e:
-                print(
-                    f"\nFailed to fetch page {page} after multiple retries: {e}. Skipping page."
-                )
-
-            pbar.update(1)
-
-    return all_movies
+    print(f"Discovered {len(discovered_ids)} unique movie IDs.")
+    return discovered_ids
 
 
-def store_movies_in_db(movies: list):
+async def fetch_full_movie_details(
+    client: httpx.AsyncClient, movie_ids: Set[int]
+) -> List[Dict[str, Any]]:
     """
-    Takes a list of movies and upserts them into the database in batches.
-    Includes exception handling for database operations.
+    Stage 2: Fetch full, enriched details for each movie ID using `append_to_response`.
     """
-    if not movies:
-        print("No movies to store in the database.")
-        return
+    print(f"Fetching full details for {len(movie_ids)} movies...")
+    # A semaphore limits the number of concurrent requests.
+    semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+    tasks = []
 
-    print(f"\nPreparing to upsert {len(movies)} movies into the database...")
-    db = SessionLocal()
-    try:
-        Base.metadata.create_all(bind=engine)
+    for movie_id in movie_ids:
 
-        total_movies_processed = 0
-        with tqdm(total=len(movies), desc="Upserting to DB") as pbar:
-            for i in range(0, len(movies), DB_BATCH_SIZE):
-                batch = movies[i : i + DB_BATCH_SIZE]
+        async def fetch_one(mid):
+            async with semaphore:
                 try:
-                    crud_movie.bulk_upsert_movies(db, batch)
-                    total_movies_processed += len(batch)
-                    pbar.update(len(batch))
-                except SQLAlchemyError as e:
-                    print(
-                        f"\nDatabase error occurred during batch {i//DB_BATCH_SIZE + 1}. Rolling back."
+                    params = {
+                        "api_key": settings.TMDB_API_KEY,
+                        "append_to_response": "credits,keywords",
+                    }
+                    response = await client.get(
+                        f"{TMDB_API_URL}/movie/{mid}", params=params
                     )
-                    print(f"Error: {e}")
-                    db.rollback()  # Rollback the failed transaction
-                    raise
+                    response.raise_for_status()
+                    return response.json()
+                except httpx.HTTPStatusError:
+                    # It's okay if a single movie fails, we just skip it.
+                    return None
 
-        print(f"\nSuccessfully processed and stored {total_movies_processed} movies.")
+        tasks.append(fetch_one(movie_id))
 
-    finally:
-        db.close()
+    movie_details_list = []
+    for response_task in tqdm(
+        asyncio.as_completed(tasks), total=len(tasks), desc="Fetching Details"
+    ):
+        try:
+            details = await response_task
+            if details:
+                movie_details_list.append(details)
+        except Exception as e:
+            continue
+            # print(f"An error occurred while fetching movie details: {e}")
+
+    return movie_details_list
 
 
-def main():
-    """Main orchestration function."""
+def process_and_format_movies(
+    movies_details: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    Transforms the raw, rich data from TMDb into the flat structure needed for our database.
+    """
+    print("Processing and formatting movie data for database ingestion...")
+    processed_movies = []
+    for data in movies_details:
+        # Extract director and cast from the 'credits' part of the response
+        director = next(
+            (
+                {"id": p["id"], "name": p["name"]}
+                for p in data.get("credits", {}).get("crew", [])
+                if p["job"] == "Director"
+            ),
+            None,
+        )
+        top_cast = [
+            {"id": p["id"], "name": p["name"]}
+            for p in data.get("credits", {}).get("cast", [])[:5]
+        ]
 
-    # --- Stage 1: Fetching data from API ---
-    print("--- Stage 1: Fetching data from TMDb API ---")
-    session = create_resilient_session()
-    try:
-        all_movies = fetch_all_movies_from_api(session)
-    finally:
-        session.close()
+        processed_movies.append(
+            {
+                "id": data["id"],
+                "title": data.get("title"),
+                "overview": data.get("overview"),
+                "release_date": data.get("release_date"),
+                "poster_path": data.get("poster_path"),
+                "backdrop_path": data.get("backdrop_path"),
+                "genres": data.get("genres", []),
+                "keywords": data.get("keywords", {}).get("keywords", []),
+                "director": director,
+                "cast": top_cast,
+                "collection": data.get("belongs_to_collection"),
+                "vote_count": data.get("vote_count"),
+                "vote_average": data.get("vote_average"),
+            }
+        )
+    return processed_movies
 
-    if not all_movies:
-        print("No movies fetched from API. Exiting.")
+
+async def main():
+    """Main orchestration function for the entire ingestion process."""
+
+    # --- Stage 1: Discover Movie IDs ---
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+        print(f"Found {len(existing_db_ids)} movies already in the database.")
+
+        discovered_ids = await discover_movie_ids(client)
+        new_ids_to_fetch = discovered_ids - existing_db_ids
+
+        if not new_ids_to_fetch:
+            print("No new movies to ingest. Exiting.")
+            return
+
+    # --- Stage 2: Fetch Full Details for New Movies ---
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        full_details = await fetch_full_movie_details(client, new_ids_to_fetch)
+
+    if not full_details:
+        print("Failed to fetch details for any new movies. Exiting.")
         return
 
-    # --- Stage 2: Backing up data to local file ---
-    print(
-        f"\n--- Stage 2: Backing up {len(all_movies)} movies to {BACKUP_FILE_PATH} ---"
-    )
+    # --- Stage 3: Process and Backup ---
+    movies_to_store = process_and_format_movies(full_details)
+    print(f"Processed {len(movies_to_store)} movies ready for storage.")
+
+    print(f"Backing up data to {BACKUP_FILE_PATH}...")
     try:
         with open(BACKUP_FILE_PATH, "w", encoding="utf-8") as f:
-            json.dump(all_movies, f, ensure_ascii=False, indent=4)
-        print(f"Successfully created local backup.")
+            json.dump(movies_to_store, f, ensure_ascii=False, indent=2)
+        print("Backup successful.")
     except IOError as e:
-        print(f"Error writing to backup file: {e}")
-        # We can still proceed to the database stage even if backup fails.
+        print(f"Warning: Could not write backup file: {e}")
 
-    # --- Stage 3: Storing data in database ---
-    print(f"\n--- Stage 3: Storing movies in PostgreSQL database ---")
-    try:
-        store_movies_in_db(all_movies)
-    except Exception as e:
-        print(
-            f"\nAn unrecoverable error occurred during the database storage phase: {e}"
-        )
-        print("Please check the database connection and logs.")
-        print(
-            f"The fetched data is safely stored in '{BACKUP_FILE_PATH}' for a future retry."
-        )
+    from datetime import datetime
+
+    for movie in movies_to_store:
+        release_date_str = movie.get("release_date")
+        if release_date_str and isinstance(release_date_str, str):
+            try:
+                movie["release_date"] = datetime.fromisoformat(release_date_str).date()
+            except ValueError:
+                movie["release_date"] = None
+        else:
+            movie["release_date"] = None
+
+    # --- Stage 4: Store in Database ---
+    print("Storing new movies in the database...")
+    async with AsyncSessionLocal() as db:
+        await crud_movie.bulk_upsert_movies(db, movies_to_store)
+
+    print(f"Successfully ingested {len(movies_to_store)} new movies into the database.")
 
 
 if __name__ == "__main__":
-    print("--- Starting Metadata Ingestion Process ---")
-    main()
+    print("--- Starting Full Metadata Ingestion Process ---")
+    asyncio.run(main())
     print("--- Metadata Ingestion Process Finished ---")

@@ -1,6 +1,7 @@
 from typing import List, Optional
 
 from pydantic import BaseModel
+from datetime import date
 
 
 class Genre(BaseModel):
@@ -11,8 +12,9 @@ class Genre(BaseModel):
 class MovieBase(BaseModel):
     title: Optional[str] = None
     overview: Optional[str] = None
-    release_year: Optional[int] = None
+    release_date: Optional[date] = None
     poster_path: Optional[str] = None
+    backdrop_path: Optional[str] = None
     genres: Optional[List[Genre]] = []
 
 
@@ -30,10 +32,20 @@ class Movie(MovieBase):
 class MovieSearchResult(BaseModel):
     id: int
     title: str
-    release_year: Optional[int]
+    overview: Optional[str] = None
+    genres: List[Genre] = []
+    release_date: Optional[date]
+    backdrop_path: Optional[str]
     poster_path: Optional[str]
 
 
 class SimilarMovie(Movie):
     ai_score: float
     user_votes: int
+
+
+class TrendingMoviesPage(BaseModel):
+    page: int
+    results: List[Movie]  # We can reuse our existing Movie schema
+    total_pages: int
+    total_results: int

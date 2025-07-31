@@ -1,24 +1,32 @@
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Set, Callable
 
 from neo4j import Driver, exceptions
-from sqlalchemy import desc
+from sqlalchemy import insert
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 
 from ..models.movie import Movie
+from app.schemas.movie import MovieSearchResult, Genre
 
 
-def get_existing_movie_ids(db: Session) -> Set[int]:
-    existing_ids = db.query(Movie.id).all()
-    return {id_tuple[0] for id_tuple in existing_ids}
+async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
+    result = await db.execute(select(Movie.id))
+    return {id_tuple[0] for id_tuple in result.all()}
 
 
-def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
-    db.bulk_insert_mappings(Movie, movies)
-    db.commit()
+async def bulk_create_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
+    if not movies:
+        return
+    await db.execute(insert(Movie), movies)
+    await db.commit()
 
 
-def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
+def chunker(seq, size):
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
     """
     Performs a bulk "upsert" (insert or update) of movies into the database.
     If a movie with the same ID already exists, it will be updated.
@@ -27,33 +35,54 @@ def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
     if not movies:
         return
 
-    stmt = insert(Movie.__table__).values(movies)
+    BATCH_SIZE = 1000  # This will create about 13,000 parameters per batch, well under the 32k limit.
 
-    # Define what to do on conflict (i.e., when a movie ID already exists)
-    # We update all columns except for the 'id' itself.
-    update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
+    # Process the movies in batches
+    for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
+        print(f"Processing batch {i+1} with {len(movie_batch)} movies...")
+        try:
+            # The core upsert logic is the same, but applied to the BATCH
+            stmt = insert(Movie.__table__).values(movie_batch)
 
-    upsert_stmt = stmt.on_conflict_do_update(index_elements=["id"], set_=update_dict)
+            update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
 
-    db.execute(upsert_stmt)
-    db.commit()
+            upsert_stmt = stmt.on_conflict_do_update(
+                index_elements=["id"], set_=update_dict
+            )
+
+            await db.execute(upsert_stmt)
+            await db.commit()  # Commit after each successful batch
+        except Exception as e:
+            with open("error_log.txt", "a") as error_file:
+                error_file.write(f"Error during bulk upsert: {e}\n")
+            await db.rollback()
 
 
-def get_movie_by_id(db: Session, movie_id: int) -> Movie | None:
+async def get_movie_by_id(db: AsyncSession, movie_id: int) -> Movie | None:
     """Fetches a single movie by its ID from PostgreSQL."""
-    return db.query(Movie).filter(Movie.id == movie_id).first()
+    result = await db.execute(select(Movie).filter(Movie.id == movie_id))
+    return result.scalars().first()
 
 
-def get_movies_by_ids(db: Session, movie_ids: List[int]) -> List[Movie]:
+async def get_movies_by_ids(db: AsyncSession, movie_ids: List[int]) -> List[Movie]:
     """Fetches multiple movies by their IDs from PostgreSQL."""
     if not movie_ids:
         return []
-    return db.query(Movie).filter(Movie.id.in_(movie_ids)).all()
+    result = await db.execute(select(Movie).filter(Movie.id.in_(movie_ids)))
+    return result.scalars().all()
 
 
-def search_movies_by_title(db: Session, query: str, limit: int = 20) -> List[Movie]:
-    """Searches for movies by title in PostgreSQL (case-insensitive)."""
-    return db.query(Movie).filter(Movie.title.ilike(f"%{query}%")).limit(limit).all()
+async def search_movies_by_title(
+    db: AsyncSession, query: str, limit: int = 20
+) -> List[MovieSearchResult]:
+    """
+    Searches for movies by title and returns data structured for the
+    MovieSearchResult schema.
+    """
+    stmt = select(Movie).filter(Movie.title.ilike(f"%{query}%")).limit(limit)
+    result = await db.execute(stmt)
+
+    return result.scalars().all()
 
 
 def get_similar_movies_from_graph(
@@ -103,3 +132,26 @@ def increment_user_vote_in_graph(
     except Exception as e:
         print(f"An unexpected error occurred while incrementing vote: {e}")
         return False
+
+
+async def filter_existing_movie_ids(db: AsyncSession, movie_ids: List[int]) -> Set[int]:
+    """
+    Takes a list of movie IDs and returns a set containing only the IDs
+    that are NOT already in the database.
+    """
+    if not movie_ids:
+        return set()
+
+    result = await db.execute(select(Movie.id).filter(Movie.id.in_(movie_ids)))
+    existing_ids = result.scalars().all()
+
+    return set(movie_ids) - set(existing_ids)
+
+
+async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> Set[int]:
+    """
+    Efficiently fetches all existing movie IDs from the database.
+    """
+    async with db_session_factory() as db:
+        result = await db.execute(select(Movie.id).filter(Movie.vote_count.is_(None)))
+        return {row[0] for row in result.all()}

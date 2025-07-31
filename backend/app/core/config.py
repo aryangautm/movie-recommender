@@ -13,7 +13,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str
 
     TMDB_API_KEY: str
+    TMDB_API_V4_ACCESS_TOKEN: str
     DATABASE_URL: str
+
+    @property
+    def SYNC_DATABASE_URL(self) -> str:
+        return self.DATABASE_URL.replace("+asyncpg", "+psycopg2")
 
     NEO4J_URI: str
     NEO4J_USER: str

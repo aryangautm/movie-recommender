@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Movie } from '../App';
 import { UpArrowIcon, CheckIcon, SpinnerIcon } from './icons';
@@ -6,7 +7,7 @@ interface SuggestionCardProps {
   movie: Movie;
   index: number;
   onSelectMovie: (movie: Movie) => void;
-  onUpvote: (movieId: number) => void;
+  onUpvote: () => void;
 }
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectMovie, onUpvote }) => {
@@ -25,7 +26,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
 
     // Simulate a delay before refreshing suggestions
     await new Promise(res => setTimeout(res, 500));
-    onUpvote(movie.id);
+    onUpvote();
   };
 
   return (
