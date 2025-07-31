@@ -22,9 +22,9 @@ const SearchPage: React.FC<SearchPageProps> = ({
 }) => {
   return (
     <div className="flex flex-col items-center justify-center flex-grow p-4">
-      <div className={`w-full flex flex-col items-center transition-transform duration-500 ease-in-out ${isSearchActive ? 'translate-y-24' : 'translate-y-[10rem] sm:translate-y-56 md:translate-y-56 lg:translate-y-56'}`}>
+      <div className={`w-full flex flex-col items-center transition-transform duration-500 ease-in-out ${isSearchActive ? 'translate-y-16' : 'translate-y-[8rem] sm:translate-y-48 md:translate-y-48 lg:translate-y-24'}`}>
         <div className="text-center mb-8">
-          <h1 className="text-4xl sm:text-4xl lg:text-5xl font-medium bg-gradient-to-b from-white to-gray-400 bg-clip-text text-transparent pb-2">
+          <h1 className="text-4xl sm:text-4xl lg:text-5xl font-medium bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent pb-2">
             looking for your next watch?
           </h1>
           <p className="mt-2 text-lg text-gray-400">

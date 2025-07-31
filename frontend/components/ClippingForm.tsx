@@ -42,7 +42,7 @@ const ClippingForm: React.FC<ClippingFormProps> = ({ searchQuery, setSearchQuery
 
 
   return (
-    <div className="w-full max-w-xl lg:max-w-2xl bg-[#1C1C1E]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
+    <div className="w-full max-w-xl lg:max-w-2xl bg-[#171717] backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
       
       {/* Search Input */}
       <div className="relative">

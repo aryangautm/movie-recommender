@@ -31,7 +31,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show,
 
   return (
     <div className={`w-full max-w-xl lg:max-w-2xl mt-4 transition-all duration-500 ease-in-out ${show ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-      <div className="bg-black/40 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4 max-h-[40vh] overflow-y-auto">
+      <div className="bg-[#7D1AED]/10 backdrop-blur-lg border border-white/10 rounded-2xl shadow-2xl p-4 max-h-[40vh] overflow-y-auto">
         {isLoading && (
           <div className="flex justify-center items-center py-10">
             <SpinnerIcon className="w-8 h-8 text-white" />
