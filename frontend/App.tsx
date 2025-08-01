@@ -5,6 +5,7 @@ import SearchPage from './pages/SearchPage';
 import TrendingPage from './pages/TrendingPage';
 import FocusPage from './pages/FocusPage';
 import Stars from './components/Stars';
+import { Header } from '@/components/ui/Header';
 
 export interface Movie {
   id: number;
@@ -25,7 +26,7 @@ const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<NavItem>('search');
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
@@ -134,43 +135,39 @@ const App: React.FC = () => {
 
   return (
     <div ref={scrollContainerRef} data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
-      {/* The header is now fixed to the viewport */}
-      <header className={`fixed top-0 left-0 right-0 z-40 flex items-center justify-between sm:justify-start py-4 px-4 sm:px-8 transition-all duration-300 ${isScrolled ? 'bg-gradient-to-b from-black/90 via-black/40 to-transparent' : 'bg-transparent'}`}>
-        <div className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
-          <WavingHandIcon />
-          <span>Hey, Aryan!</span>
-        </div>
+      <Header.Root isScrolled={isScrolled}>
+        <Header.Left className="hidden sm:flex">
+          <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
+            <WavingHandIcon />
+            <span>Hey!</span>
+          </div>
+        </Header.Left>
 
-        {/* Centering the navigation */}
-        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+        <Header.Center>
           <HeaderNavigation activePage={activePage} onNavigate={setActivePage} />
-        </div>
+        </Header.Center>
 
-        {/* Placeholder for right-side content if needed, ensures proper spacing */}
-        <div className="hidden sm:flex w-[138px]"></div>
-      </header>
-
-      {/* <Stars mousePos={mousePos} /> */}
+        <Header.Right className="hidden sm:flex"><div /></Header.Right>
+      </Header.Root>
 
       <div className="relative z-10 flex flex-col min-h-screen">
-        {/* Add padding to the top of the main content to offset the fixed header's height */}
-        <main className="flex-grow pt-24 sm:pt-32">
+        <main className="relative flex-grow pt-24 sm:pt-32">
           {activePage === 'search' && (
-        <SearchPage 
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          isLoading={isLoading}
-          searchResults={searchResults}
-          isSearchActive={isSearchActive}
-          onSelectMovie={handleSelectMovie}
-        />
+            <SearchPage
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              isLoading={isLoading}
+              searchResults={searchResults}
+              isSearchActive={isSearchActive}
+              onSelectMovie={handleSelectMovie}
+            />
           )}
           {activePage === 'trending' && (
-        <TrendingPage onSelectMovie={handleSelectMovie} />
+            <TrendingPage onSelectMovie={handleSelectMovie} />
           )}
         </main>
       </div>
-        </div>
+    </div>
   );
 };
 

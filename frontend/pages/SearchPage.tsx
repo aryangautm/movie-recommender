@@ -21,8 +21,8 @@ const SearchPage: React.FC<SearchPageProps> = ({
   onSelectMovie,
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center flex-grow p-4">
-      <div className={`w-full flex flex-col items-center transition-transform duration-500 ease-in-out ${isSearchActive ? 'translate-y-16' : 'translate-y-[8rem] sm:translate-y-48 md:translate-y-48 lg:translate-y-24'}`}>
+    <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
+      <div className={`w-full flex flex-col items-center transition-transform duration-500 ease-in-out ${isSearchActive ? '-translate-y-16' : 'translate-y-0'}`}>
         <div className="text-center mb-8">
           <h1 className="text-4xl sm:text-4xl lg:text-5xl font-medium bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent pb-2">
             looking for your next watch?
