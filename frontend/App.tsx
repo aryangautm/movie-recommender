@@ -1,10 +1,11 @@
-
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { WavingHandIcon } from './components/icons';
 import HeaderNavigation, { NavItem } from './components/HeaderNavigation';
 import SearchPage from './pages/SearchPage';
 import TrendingPage from './pages/TrendingPage';
 import FocusPage from './pages/FocusPage';
+import Stars from './components/Stars';
+import { Header } from '@/components/ui/Header';
 
 export interface Movie {
   id: number;
@@ -25,14 +26,30 @@ const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<NavItem>('search');
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  
+
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Movie[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
+  const [isScrolled, setIsScrolled] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const isSearchActive = searchQuery.length >= 3;
+
+  useEffect(() => {
+    const handleMouseMove = (event: MouseEvent) => {
+      setMousePos({ x: event.clientX, y: event.clientY });
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+
+    // Cleanup function to remove the listener when the component unmounts
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -43,6 +60,19 @@ const App: React.FC = () => {
       clearTimeout(handler);
     };
   }, [searchQuery]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      setIsScrolled(scrollTop > 10);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
 
   useEffect(() => {
     if (debouncedQuery.length < 3) {
@@ -104,22 +134,26 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="relative min-h-screen font-sans text-white overflow-y-auto bg-gradient-to-b from-[#110E1B] to-[#25142d]">
-      <div className="relative z-10 flex flex-col min-h-screen">
-        <header className="relative flex items-center py-14 sm:p-8 md:p-8 lg:p-8">
-          <div className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
+    <div ref={scrollContainerRef} data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
+      <Header.Root isScrolled={isScrolled}>
+        <Header.Left className="hidden sm:flex">
+          <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
             <WavingHandIcon />
-            <span>Hey, Aryan!</span>
+            <span>Hey!</span>
           </div>
+        </Header.Left>
 
-          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-            <HeaderNavigation activePage={activePage} onNavigate={setActivePage} />
-          </div>
-        </header>
+        <Header.Center>
+          <HeaderNavigation activePage={activePage} onNavigate={setActivePage} />
+        </Header.Center>
 
-        <main className="flex-grow">
+        <Header.Right className="hidden sm:flex"><div /></Header.Right>
+      </Header.Root>
+
+      <div className="relative z-10 flex flex-col min-h-screen">
+        <main className="relative flex-grow pt-24 sm:pt-32">
           {activePage === 'search' && (
-            <SearchPage 
+            <SearchPage
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}
               isLoading={isLoading}

@@ -42,8 +42,8 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
           />
         </div>
 
-        <div className="flex-grow overflow-hidden">
-          <h3 className="font-semibold text-white truncate">{movie.title}</h3>
+        <div className="flex-grow overflow-hidden min-w-0">
+          <h3 className="font-semibold text-white line-clamp-1">{movie.title}</h3>
           <p className="text-sm text-gray-400 mt-1 line-clamp-1">{movie.overview}</p>
           <p className="text-xs text-gray-500 mt-2">Year of Release: {movie.year}</p>
         </div>

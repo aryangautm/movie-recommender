@@ -13,9 +13,9 @@ const TrendingCard: React.FC<TrendingCardProps> = ({ item, onSelectMovie }) => {
       onClick={() => onSelectMovie(item)}
     >
       <img
-        src={item.posterUrl.replace('128x192', '300x450')}
-        alt={`${item.title} poster`}
-        className="w-full h-[300px] sm:h-[250px] md:h-[250px] lg:h-[250px] aspect-[2/3] object-cover bg-gray-800"
+        src={item.posterUrl}
+        alt={`${item.title}`}
+        className="w-full h-auto aspect-[2/3] object-cover bg-gray-800"
       />
       <div className="p-4">
         <h3 className="font-bold text-white truncate text-lg">{item.title}</h3>
