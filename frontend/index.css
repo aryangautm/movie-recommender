@@ -7,11 +7,11 @@ body {
     margin: 0;
     padding: 0;
     background: black;
-    background-image: radial-gradient(ellipse 80% 80% at 50% 0%, #7D1AED -10%, #1B1543 40%, black 100%);
+    background-image: radial-gradient(ellipse 1900px 70vh at 50% 0%, #7D1AED -10%, #1B1543 40%, black 100%);
     background-attachment: fixed;
     background-size: cover;
     background-repeat: no-repeat;
-    background-position: center bottom;
+    background-position: center top;
     min-height: 100vh;
     overflow-x: hidden;
 }
