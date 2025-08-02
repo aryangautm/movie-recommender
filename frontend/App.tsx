@@ -12,12 +12,13 @@ export interface Movie {
   title: string;
   overview: string;
   year: number;
-  posterUrl: string;
-  backdropUrl?: string | null;
+  posterPath: string;
+  backdropPath?: string | null;
   releaseDate: string;
   contentType: 'movie' | 'tvShow';
   runtime: string;
   genres: string[];
+  keywords?: string[];
 }
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
@@ -81,19 +82,16 @@ const App: React.FC = () => {
           id: item.id,
           title: item.title,
           year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
-          posterUrl: item.poster_path
-            ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${item.poster_path}`
-            : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
-          backdropUrl: item.backdrop_path
-            ? `${IMAGES_BASE_URL}/${BACKDROP_SIZE}${item.backdrop_path}`
-            : null,
+          posterPath: item.poster_path,
+          backdropPath: item.backdrop_path,
           overview: item.overview
             ? item.overview
             : `Overview for "${item.title}" is not available via search.`,
           releaseDate: String(item.release_date),
           contentType: 'movie',
           runtime: 'N/A',
-          genres: item.genres.map((genre: any) => genre.name) || []
+          genres: item.genres.map((genre: any) => genre.name) || [],
+          keywords: item.keywords || [],
         }));
 
         setSearchResults(formattedResults);

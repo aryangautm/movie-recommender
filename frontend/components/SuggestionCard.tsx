@@ -9,8 +9,14 @@ interface SuggestionCardProps {
   onSelectMovie: (movie: Movie) => void;
   onUpvote: () => void;
 }
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
+const POSTER_SIZE = 'w300';
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectMovie, onUpvote }) => {
+  const posterUrl = movie.posterPath
+    ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${movie.posterPath}`
+    : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(movie.title)}`;
+
   const [upvoteState, setUpvoteState] = useState<'idle' | 'loading' | 'success'>('idle');
 
   const handleUpvote = async (e: React.MouseEvent) => {
@@ -36,7 +42,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
         <div className="relative flex-shrink-0">
           <div className="absolute inset-0 bg-black/20 rounded-lg -z-10"></div>
           <img
-            src={movie.posterUrl}
+            src={posterUrl}
             alt={`${movie.title}`}
             className="w-16 h-24 object-cover rounded-lg flex-shrink-0 bg-gray-800"
           />

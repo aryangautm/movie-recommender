@@ -20,5 +20,6 @@ class Movie(Base):
     director = Column(JSON, nullable=True)  # Storing as JSON to hold name and ID
     cast = Column(JSON, nullable=True)
     collection = Column(JSON, nullable=True)
-    vote_count = Column(Integer, default=0)
+    vote_count = Column(Integer, nullable=True)
     vote_average = Column(Float, default=0.0)
+    ai_keywords = Column(JSON, nullable=True)

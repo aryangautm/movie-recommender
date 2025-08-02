@@ -49,6 +49,13 @@ export const LeftArrowInCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (p
   </svg>
 );
 
+export const RightArrowInCircleIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
+    <circle cx="16" cy="16" r="15.5" stroke="white" strokeOpacity="0.3" />
+    <path d="M14 11L19 16L14 21" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 
 export const UpArrowIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" {...props}>
@@ -59,5 +66,11 @@ export const UpArrowIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
 export const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" {...props}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+  </svg>
+);
+
+export const ChevronDownIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" {...props}>
+    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 9-7.5 7.5-7.5-7.5" />
   </svg>
 );

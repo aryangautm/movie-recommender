@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Set, Callable
 
 from neo4j import Driver, exceptions
-from sqlalchemy import insert
+from sqlalchemy import insert, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -58,6 +58,63 @@ async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
             await db.rollback()
 
 
+async def bulk_patch_movies(db: AsyncSession, movies_data: List[Dict[str, Any]]):
+    """
+    Performs a general-purpose bulk "PATCH" on the movies table.
+
+    For each dictionary in the list, it updates only the fields provided.
+    Each dictionary MUST contain the 'id' key for matching. Other columns
+    in the table that are not present in the dictionary will be ignored and
+    left untouched in the database.
+
+    Args:
+        db: The AsyncSession for database interaction.
+        movies_data: A list of dictionaries, where each dictionary represents
+                     a movie to patch. e.g., [{"id": 1, "ai_keywords": [...]}]
+    """
+    if not movies_data:
+        return
+
+    BATCH_SIZE = 1000
+
+    print(f"Starting bulk patch for {len(movies_data)} records...")
+    for i, movie_batch in enumerate(chunker(movies_data, BATCH_SIZE)):
+        if not movie_batch:
+            continue
+
+        print(f"Processing batch {i+1} with {len(movie_batch)} movies...")
+        try:
+            stmt = insert(Movie.__table__).values(movie_batch)
+
+            update_dict = {
+                c.name: c
+                for c in stmt.excluded
+                if c.name in movie_batch[0] and c.name != "id"
+            }
+
+            if not update_dict:
+                print(f"Batch {i+1} had no fields to update other than 'id'. Skipping.")
+                continue
+
+            # On conflict (i.e., the movie 'id' exists), update only the specified fields.
+            patch_stmt = stmt.on_conflict_do_update(
+                index_elements=["id"], set_=update_dict
+            )
+
+            await db.execute(patch_stmt)
+            await db.commit()
+            print(f"Successfully patched batch {i+1}.")
+
+        except Exception as e:
+            print(f"Error during bulk patch on batch {i+1}: {e}")
+
+            await db.rollback()
+            with open("patch_error_log.txt", "a") as error_file:
+                error_file.write(f"Error: {e}\nBatch Data: {movie_batch}\n\n")
+
+    print("Bulk patch process completed.")
+
+
 async def get_movie_by_id(db: AsyncSession, movie_id: int) -> Movie | None:
     """Fetches a single movie by its ID from PostgreSQL."""
     result = await db.execute(select(Movie).filter(Movie.id == movie_id))
@@ -78,8 +135,26 @@ async def search_movies_by_title(
     """
     Searches for movies by title and returns data structured for the
     MovieSearchResult schema.
+    Full-text search is used here;
     """
-    stmt = select(Movie).filter(Movie.title.ilike(f"%{query}%")).limit(limit)
+    query_parts = query.strip().split()
+    tsquery_str = " & ".join([part + ":*" for part in query_parts])
+
+    match_condition = func.to_tsvector("english", Movie.title).op("@@")(
+        func.to_tsquery("english", tsquery_str)
+    )
+
+    rank = func.ts_rank(
+        func.to_tsvector("english", Movie.title),
+        func.to_tsquery("english", tsquery_str),
+    ).label("rank")
+
+    stmt = (
+        select(Movie, rank)
+        .filter(match_condition)
+        .order_by(rank.desc(), Movie.vote_count.desc().nulls_last())
+        .limit(limit)
+    )
     result = await db.execute(stmt)
 
     return result.scalars().all()
@@ -153,5 +228,5 @@ async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> S
     Efficiently fetches all existing movie IDs from the database.
     """
     async with db_session_factory() as db:
-        result = await db.execute(select(Movie.id).filter(Movie.vote_count.is_(None)))
+        result = await db.execute(select(Movie.id).filter(Movie.vote_count == 0))
         return {row[0] for row in result.all()}
