@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Movie } from '../App';
-import { LeftArrowInCircleIcon, SpinnerIcon } from '../components/icons';
-import SuggestionCard from '../components/SuggestionCard';
-import HeaderNavigation, { NavItem } from '../components/HeaderNavigation';
+import { Movie } from '@/App';
+import { LeftArrowInCircleIcon, SpinnerIcon } from '@/components/icons';
+import SuggestionCard from '@/components/SuggestionCard';
+import { Header } from '@/components/ui/Header';
 
 interface FocusPageProps {
   movie: Movie;
@@ -12,13 +12,14 @@ interface FocusPageProps {
 }
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
-const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
+const POSTER_SIZE = 'w300';
+const BACKDROP_SIZE = 'w780';
 
 const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie }) => {
   const [suggestions, setSuggestions] = useState<Movie[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activePage, setActivePage] = useState<NavItem>('search');
 
   const fetchSuggestions = useCallback(async () => {
     setIsLoadingSuggestions(true);
@@ -30,15 +31,15 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
       }
       const data = await response.json();
 
-      const formattedSuggestions: Movie[] = data.slice(0, 4).map((item: any) => ({
+      const formattedSuggestions: Movie[] = data.map((item: any) => ({
         id: item.id,
         title: item.title,
         year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
         posterUrl: item.poster_path
-          ? `${IMAGES_BASE_URL}${item.poster_path}`
+          ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${item.poster_path}`
           : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
         backdropUrl: item.backdrop_path
-          ? `${IMAGES_BASE_URL}${item.backdrop_path}`
+          ? `${IMAGES_BASE_URL}/${BACKDROP_SIZE}${item.backdrop_path}`
           : null,
         overview: item.overview || `Overview for "${item.title}" is not available.`,
         releaseDate: String(item.release_date || 'N/A'),
@@ -94,12 +95,14 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
   return (
     <div className="relative h-screen font-sans text-white overflow-hidden">
       {/* Back to Home Button */}
-      <header className="absolute top-6 left-6 lg:top-8 lg:left-8 z-30">
-        <button onClick={onGoHome} className="flex items-center gap-3 text-white/80 hover:text-white transition-colors duration-300 group">
-          <LeftArrowInCircleIcon className="w-8 h-8 group-hover:scale-110 transition-transform" />
-          <span className="font-medium text-lg">Home</span>
-        </button>
-      </header>
+      <Header.Root>
+        <Header.Left className="hidden sm:flex">
+          <button onClick={onGoHome} className="flex items-center gap-3 text-white/80 hover:text-white transition-colors duration-300 group">
+            <LeftArrowInCircleIcon className="w-8 h-8 group-hover:scale-110 transition-transform" />
+            <span className="font-medium text-lg">Home</span>
+          </button>
+        </Header.Left>
+      </Header.Root>
 
       <main className="w-full h-full px-4 sm:px-6 lg:px-8 pt-28 pb-12 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
