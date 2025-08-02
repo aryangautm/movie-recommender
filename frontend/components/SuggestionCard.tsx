@@ -20,7 +20,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
     setUpvoteState('loading');
     // Simulate API call
     await new Promise(res => setTimeout(res, 1000));
-    
+
     // For this example, we'll assume it always succeeds.
     setUpvoteState('success');
 
@@ -35,9 +35,9 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
       <div className="flex-grow bg-white/[.03] hover:bg-white/10 p-3 rounded-2xl flex items-center gap-4 transition-all duration-300 border border-white/10 cursor-pointer group" onClick={() => onSelectMovie(movie)}>
         <div className="relative flex-shrink-0">
           <div className="absolute inset-0 bg-black/20 rounded-lg -z-10"></div>
-            <img
+          <img
             src={movie.posterUrl}
-            alt={`${movie.title} poster`}
+            alt={`${movie.title}`}
             className="w-16 h-24 object-cover rounded-lg flex-shrink-0 bg-gray-800"
           />
         </div>
@@ -61,7 +61,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
           >
             {upvoteState === 'idle' && <UpArrowIcon className="w-5 h-5" />}
             {upvoteState === 'loading' && <SpinnerIcon className="w-5 h-5" />}
-            {upvoteState === 'success' && <CheckIcon className="w-5 h-5" />}
+            {upvoteState === 'success' && <UpArrowIcon className="w-5 h-5" />}
           </button>
         </div>
       </div>

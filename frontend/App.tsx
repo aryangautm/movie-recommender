@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { WavingHandIcon } from './components/icons';
 import HeaderNavigation, { NavItem } from './components/HeaderNavigation';
 import SearchPage from './pages/SearchPage';
 import TrendingPage from './pages/TrendingPage';
 import FocusPage from './pages/FocusPage';
-import Stars from './components/Stars';
 import { Header } from '@/components/ui/Header';
+// import Stars from './components/Stars';
 
 export interface Movie {
   id: number;
@@ -21,7 +21,9 @@ export interface Movie {
 }
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
-const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p/original';
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
+const POSTER_SIZE = 'w500';
+const BACKDROP_SIZE = 'w780';
 
 const App: React.FC = () => {
   const [activePage, setActivePage] = useState<NavItem>('search');
@@ -33,23 +35,21 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
-  const [isScrolled, setIsScrolled] = useState(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const isSearchActive = searchQuery.length >= 3;
+  // const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
 
-  useEffect(() => {
-    const handleMouseMove = (event: MouseEvent) => {
-      setMousePos({ x: event.clientX, y: event.clientY });
-    };
+  // useEffect(() => {
+  //   const handleMouseMove = (event: MouseEvent) => {
+  //     setMousePos({ x: event.clientX, y: event.clientY });
+  //   };
 
-    window.addEventListener('mousemove', handleMouseMove);
+  //   window.addEventListener('mousemove', handleMouseMove);
 
-    // Cleanup function to remove the listener when the component unmounts
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, []);
+  //   // Cleanup function to remove the listener when the component unmounts
+  //   return () => {
+  //     window.removeEventListener('mousemove', handleMouseMove);
+  //   };
+  // }, []);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -60,19 +60,6 @@ const App: React.FC = () => {
       clearTimeout(handler);
     };
   }, [searchQuery]);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      setIsScrolled(scrollTop > 10);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
 
   useEffect(() => {
     if (debouncedQuery.length < 3) {
@@ -95,10 +82,10 @@ const App: React.FC = () => {
           title: item.title,
           year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
           posterUrl: item.poster_path
-            ? `${IMAGES_BASE_URL}${item.poster_path}`
+            ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${item.poster_path}`
             : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
           backdropUrl: item.backdrop_path
-            ? `${IMAGES_BASE_URL}${item.backdrop_path}`
+            ? `${IMAGES_BASE_URL}/${BACKDROP_SIZE}${item.backdrop_path}`
             : null,
           overview: item.overview
             ? item.overview
@@ -134,8 +121,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div ref={scrollContainerRef} data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
-      <Header.Root isScrolled={isScrolled}>
+    <div data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
+      <Header.Root>
         <Header.Left className="hidden sm:flex">
           <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
             <WavingHandIcon />

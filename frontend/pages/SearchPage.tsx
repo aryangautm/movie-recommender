@@ -21,8 +21,21 @@ const SearchPage: React.FC<SearchPageProps> = ({
   onSelectMovie,
 }) => {
   return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center p-4">
-      <div className={`w-full flex flex-col items-center transition-transform duration-500 ease-in-out ${isSearchActive ? '-translate-y-16' : 'translate-y-0'}`}>
+    <div className="absolute inset-0 flex flex-col items-center p-4">
+      <div
+        className={`
+          w-full flex flex-col items-center 
+          transition-all duration-500 ease-in-out
+          ${isSearchActive
+            // When active, position from the top with a fixed margin and apply the desired upward translate.
+            // This anchors the content, so it won't move when SearchResults' height changes.
+            ? 'mt-[25vh] -translate-y-16'
+            // When inactive, use this trick to vertically center the block without flexbox `justify-center`.
+            // It centers the block based on its own height.
+            : 'mt-[50vh] -translate-y-1/2'
+          }
+        `}
+      >
         <div className="text-center mb-8">
           <h1 className="text-4xl sm:text-4xl lg:text-5xl font-medium bg-gradient-to-b from-white to-gray-300 bg-clip-text text-transparent pb-2">
             looking for your next watch?

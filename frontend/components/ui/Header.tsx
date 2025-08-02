@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { clsx } from 'clsx';
 
 interface HeaderRootProps extends React.HTMLAttributes<HTMLElement> {
@@ -13,18 +13,39 @@ interface HeaderSectionProps extends React.HTMLAttributes<HTMLDivElement> {
 
 const Root: React.FC<HeaderRootProps> = ({
     children,
-    isScrolled = false,
+    isScrolled: isScrolledProp,
     className,
     ...props
 }) => {
+    const [isScrolledState, setIsScrolledState] = useState(false);
+
+    useEffect(() => {
+        // Only attach the listener if the isScrolled prop is not being used
+        if (isScrolledProp !== undefined) return;
+
+        const handleScroll = () => {
+            setIsScrolledState(window.scrollY > 10);
+        };
+
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        handleScroll();
+
+        return () => {
+            window.removeEventListener('scroll', handleScroll);
+        };
+    }, [isScrolledProp]);
+
+
+    const isEffectivelyScrolled = isScrolledProp !== undefined ? isScrolledProp : isScrolledState;
+
     return (
         <header
             className={clsx(
                 'fixed top-0 left-0 right-0 z-40 grid grid-cols-3 items-center gap-4 py-4 px-4 sm:px-8 transition-all duration-300',
                 {
-                    'bg-gradient-to-b from-black/90 via-black/40 to-transparent':
-                        isScrolled,
-                    'bg-transparent': !isScrolled,
+                    'bg-gradient-to-b from-black/60 via-black/40 to-transparent':
+                        isEffectivelyScrolled,
+                    'bg-transparent': !isEffectivelyScrolled,
                 },
                 className
             )}
