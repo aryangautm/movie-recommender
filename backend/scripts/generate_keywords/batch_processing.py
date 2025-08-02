@@ -21,7 +21,7 @@ REQUESTS_PER_BATCH = 1500
 GEMINI_MODEL = "gemini-2.5-flash"
 
 ARTIFACTS_DIR = Path(__file__).parent / "artifacts"
-BATCH_REQUESTS_DIR = ARTIFACTS_DIR / "artifacts"
+BATCH_REQUESTS_DIR = ARTIFACTS_DIR / "batch_requests"
 BATCH_MANIFEST_PATH = ARTIFACTS_DIR / "batch_job_manifest.csv"
 SYSTEM_PROMPT_PATH = ARTIFACTS_DIR / "system_prompt.txt"
 
@@ -55,7 +55,7 @@ async def fetch_all_movies(session: AsyncSession) -> list:
         query = (
             select(Movie.id, Movie.title, Movie.release_date)
             .where(Movie.ai_keywords.is_(None))
-            .order_by(Movie.id)
+            .order_by(Movie.vote_count.desc().nulls_last())
         )
         result = await session.execute(query)
         all_movies = result.all()
@@ -75,7 +75,7 @@ def prepare_manifest_file(manifest_path: str):
     try:
         with open(manifest_path, "w") as f:
             f.write(
-                "job_name,input_file_name,start_movie_id,end_movie_id,request_count\n"
+                "job_name,input_file_name,start_movie_id,end_movie_id,request_count,job_status\n"
             )
     except IOError as e:
         logging.error(f"Could not open or write to manifest file {manifest_path}: {e}")
@@ -155,7 +155,7 @@ def log_job_to_manifest(
         with open(manifest_path, "a") as f:
             log_entry = (
                 f"{job_name},{uploaded_file_name},"
-                f"{start_movie_id},{end_movie_id},{len(movie_chunk)}\n"
+                f"{start_movie_id},{end_movie_id},{len(movie_chunk)},JOB_STATE_PENDING\n"
             )
             f.write(log_entry)
         logging.info(f"Recorded job details to {manifest_path}")

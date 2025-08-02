@@ -54,6 +54,7 @@ def process_succeeded_job(client, batch_job):
 def monitor_all_batch_jobs():
     """
     Reads job names from the manifest file and polls their status until all are complete.
+    Updates the manifest file with the latest job status.
     """
     logging.info("Starting batch job monitoring process.")
 
@@ -71,52 +72,82 @@ def monitor_all_batch_jobs():
         )
         return
 
+    all_jobs_data = []
+    fieldnames = []
     try:
         with open(manifest_path, mode="r", newline="") as f:
             reader = csv.DictReader(f)
-            active_jobs = [row["job_name"] for row in reader]
+            fieldnames = reader.fieldnames or []
+            all_jobs_data = list(reader)
     except (IOError, KeyError) as e:
         logging.error(f"Failed to read or parse {BATCH_MANIFEST_FILE}. Error: {e}")
         return
 
+    active_jobs = [
+        row["job_name"]
+        for row in all_jobs_data
+        if row.get("job_status") not in COMPLETED_STATES
+    ]
+
     if not active_jobs:
-        logging.warning("No jobs found in the manifest file to monitor.")
+        logging.info("No active jobs found in the manifest file to monitor.")
         return
 
     logging.info(f"Found {len(active_jobs)} jobs to monitor.")
 
     while active_jobs:
         logging.info(f"Polling cycle starting. {len(active_jobs)} jobs remaining.")
+        status_changed_in_cycle = False
 
         for job_name in list(active_jobs):
             try:
                 batch_job = client.batches.get(name=job_name)
                 current_state = batch_job.state.name
 
-                if current_state in COMPLETED_STATES:
+                # Find the job in our in-memory list and check for status change
+                job_data_to_update = next(
+                    (job for job in all_jobs_data if job["job_name"] == job_name), None
+                )
+
+                if (
+                    job_data_to_update
+                    and job_data_to_update.get("job_status") != current_state
+                ):
                     logging.info(
-                        f"Job '{job_name}' has completed with state: {current_state}"
+                        f"Job '{job_name}' status changed from '{job_data_to_update.get('job_status')}' to '{current_state}'"
                     )
+                    job_data_to_update["job_status"] = current_state
+                    status_changed_in_cycle = True
 
-                    if current_state == "JOB_STATE_SUCCEEDED":
-                        process_succeeded_job(client, batch_job)
+                    if current_state in COMPLETED_STATES:
+                        if current_state == "JOB_STATE_SUCCEEDED":
+                            process_succeeded_job(client, batch_job)
+                        elif current_state == "JOB_STATE_FAILED":
+                            print(f"\n--- Job Failed: {job_name} ---")
+                            print(f"Error: {batch_job.error}")
+                            print(f"--- End of Error for Job: {job_name} ---\n")
+                        else:  # JOB_STATE_CANCELLED
+                            print(f"\n--- Job Cancelled: {job_name} ---\n")
 
-                    elif current_state == "JOB_STATE_FAILED":
-                        print(f"\n--- Job Failed: {job_name} ---")
-                        print(f"Error: {batch_job.error}")
-                        print(f"--- End of Error for Job: {job_name} ---\n")
-
-                    else:
-                        print(f"\n--- Job Cancelled: {job_name} ---\n")
-
-                    active_jobs.remove(job_name)
+                        active_jobs.remove(job_name)
                 else:
                     logging.info(
-                        f"Job '{job_name}' is not finished. Current state: {current_state}"
+                        f"Job '{job_name}' status unchanged. Current state: {current_state}"
                     )
 
             except Exception as e:
                 logging.error(f"An error occurred while polling job '{job_name}': {e}")
+
+        # Write back to CSV if any status changed during the cycle
+        if status_changed_in_cycle:
+            try:
+                with open(manifest_path, mode="w", newline="") as f:
+                    writer = csv.DictWriter(f, fieldnames=fieldnames)
+                    writer.writeheader()
+                    writer.writerows(all_jobs_data)
+                logging.info(f"Updated manifest file: {manifest_path}")
+            except IOError as e:
+                logging.error(f"Failed to write updates to {manifest_path}. Error: {e}")
 
         if active_jobs:
             print(
