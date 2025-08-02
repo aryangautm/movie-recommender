@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     TMDB_API_KEY: str
     TMDB_API_V4_ACCESS_TOKEN: str
     DATABASE_URL: str
+    GEMINI_API_KEY: str
 
     @property
     def SYNC_DATABASE_URL(self) -> str:

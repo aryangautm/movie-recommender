@@ -155,11 +155,13 @@ async def main():
 
     # --- Stage 1: Discover Movie IDs ---
     async with httpx.AsyncClient(timeout=20.0) as client:
-        existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
-        print(f"Found {len(existing_db_ids)} movies already in the database.")
+        # existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+        # print(f"Found {len(existing_db_ids)} movies already in the database.")
 
-        discovered_ids = await discover_movie_ids(client)
-        new_ids_to_fetch = discovered_ids - existing_db_ids
+        # discovered_ids = await discover_movie_ids(client)
+        # new_ids_to_fetch = discovered_ids - existing_db_ids
+
+        new_ids_to_fetch = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
 
         if not new_ids_to_fetch:
             print("No new movies to ingest. Exiting.")
@@ -200,7 +202,7 @@ async def main():
     # --- Stage 4: Store in Database ---
     print("Storing new movies in the database...")
     async with AsyncSessionLocal() as db:
-        await crud_movie.bulk_upsert_movies(db, movies_to_store)
+        await crud_movie.bulk_patch_movies(db, movies_to_store)
 
     print(f"Successfully ingested {len(movies_to_store)} new movies into the database.")
 

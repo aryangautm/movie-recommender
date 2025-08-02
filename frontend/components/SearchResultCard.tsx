@@ -7,14 +7,21 @@ interface SearchResultCardProps {
   onSelectMovie: (movie: Movie) => void;
 }
 
+const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
+const POSTER_SIZE = 'w300';
+
 const SearchResultCard: React.FC<SearchResultCardProps> = ({ movie, onSelectMovie }) => {
+  const posterUrl = movie.posterPath
+    ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${movie.posterPath}`
+    : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(movie.title)}`;
+
   return (
-    <div 
+    <div
       className="bg-white/5 hover:bg-white/10 p-3 rounded-lg flex items-center gap-4 transition-colors duration-300 cursor-pointer"
       onClick={() => onSelectMovie(movie)}
     >
       <img
-        src={movie.posterUrl}
+        src={posterUrl}
         alt={`${movie.title} poster`}
         className="w-16 h-24 object-cover rounded-md flex-shrink-0 bg-gray-800"
       />

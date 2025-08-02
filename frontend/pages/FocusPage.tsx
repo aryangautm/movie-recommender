@@ -4,6 +4,7 @@ import { Movie } from '@/App';
 import { LeftArrowInCircleIcon, SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
 import { Header } from '@/components/ui/Header';
+import KeywordSelector from '@/components/KeywordSelector';
 
 interface FocusPageProps {
   movie: Movie;
@@ -13,15 +14,42 @@ interface FocusPageProps {
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
-const POSTER_SIZE = 'w300';
-const BACKDROP_SIZE = 'w780';
+const POSTER_SIZE = 'original';
+const BACKDROP_SIZE = 'original';
 
 const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie }) => {
+  const posterUrl = movie.posterPath
+    ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${movie.posterPath}`
+    : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(movie.title)}`;
+
+  const backdropUrl = movie.backdropPath
+    ? `${IMAGES_BASE_URL}/${BACKDROP_SIZE}${movie.backdropPath}`
+    : null;
+
+  type SuggestionState = 'selecting' | 'loading' | 'showing';
+
+  const [suggestionState, setSuggestionState] = useState<SuggestionState>(
+    (movie.keywords && movie.keywords.length > 0) ? 'selecting' : 'loading'
+  );
   const [suggestions, setSuggestions] = useState<Movie[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchSuggestions = useCallback(async () => {
+  useEffect(() => {
+    setSuggestionState((movie.keywords && movie.keywords.length > 0) ? 'selecting' : 'loading');
+    setSuggestions([]);
+    setError(null);
+    setIsLoadingSuggestions(true);
+    window.scrollTo(0, 0);
+  }, [movie.id]);
+
+  const fetchSuggestions = useCallback(async (isRefresh: boolean = false) => {
+    if (!isRefresh) {
+      console.log('Fetching initial suggestions...');
+    } else {
+      console.log('Refreshing suggestions...');
+    }
+
     setIsLoadingSuggestions(true);
     setError(null);
     try {
@@ -35,12 +63,8 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
         id: item.id,
         title: item.title,
         year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
-        posterUrl: item.poster_path
-          ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${item.poster_path}`
-          : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(item.title)}`,
-        backdropUrl: item.backdrop_path
-          ? `${IMAGES_BASE_URL}/${BACKDROP_SIZE}${item.backdrop_path}`
-          : null,
+        posterPath: item.poster_path,
+        backdropPath: item.backdrop_path,
         overview: item.overview || `Overview for "${item.title}" is not available.`,
         releaseDate: String(item.release_date || 'N/A'),
         contentType: 'movie',
@@ -49,6 +73,7 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
       }));
 
       setSuggestions(formattedSuggestions);
+      if (suggestionState !== 'showing') setSuggestionState('showing');
     } catch (err) {
       console.error("Failed to fetch similar movies:", err);
       setError("Couldn't load suggestions. Please try again later.");
@@ -56,12 +81,23 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [movie.id]);
+  }, [movie.id, suggestionState]);
 
   useEffect(() => {
-    fetchSuggestions();
-    window.scrollTo(0, 0);
-  }, [movie.id, fetchSuggestions]);
+    if (suggestionState === 'loading') {
+      fetchSuggestions(false);
+    }
+  }, [suggestionState, fetchSuggestions]);
+
+  const handleFindSimilar = (selectedKeywords: string[]) => {
+    console.log('Finding similar movies based on:', selectedKeywords);
+    setSuggestionState('loading');
+  };
+
+  const handleRefreshSuggestions = useCallback(() => {
+    fetchSuggestions(true);
+  }, [fetchSuggestions]);
+
 
   const SuggestionsContent = (
     <>
@@ -80,7 +116,7 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
               movie={suggestion}
               index={index + 1}
               onSelectMovie={onSelectMovie}
-              onUpvote={fetchSuggestions}
+              onUpvote={handleRefreshSuggestions}
             />
           ))}
         </div>
@@ -112,16 +148,16 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
             {/* Movie Details Section with Backdrop */}
             <div className="relative overflow-hidden">
               {/* 1. Backdrop image at z‑0 */}
-              {movie.backdropUrl && (
+              {backdropUrl && (
                 <div
                   className="absolute inset-0 w-full h-full bg-cover bg-center z-0"
-                  style={{ backgroundImage: `url(${movie.backdropUrl})` }}
+                  style={{ backgroundImage: `url(${backdropUrl})` }}
                 />
               )}
 
               {/* 2. Gradient overlay at z‑10 */}
               <div
-                className="absolute inset-0 bg-gradient-to-b from-black/60 via-[#110E1B]/50 to-black/60 z-10"
+                className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/70 to-black/100 z-10"
               />
 
               {/* 3. Content at z‑20 */}
@@ -131,7 +167,7 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
                   <div className="w-1/2 sm:w-1/3 flex-shrink-0 mx-auto md:mx-0">
                     <div className="aspect-[2/3] w-full border border-white/10 rounded-2xl flex items-center justify-center bg-black/20 shadow-lg">
                       <img
-                        src={movie.posterUrl.replace('128x192', '300x450')}
+                        src={posterUrl}
                         alt={`${movie.title}`}
                         className="w-full h-full object-cover rounded-2xl"
                       />
@@ -169,18 +205,26 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
 
                     <div className="mt-8">
                       <h2 className="text-2xl font-semibold mb-3">Overview</h2>
-                      <p className="text-white/80 leading-relaxed text-base">
+                      <p className="text-white leading-relaxed text-base">
                         {movie.overview}
                       </p>
                     </div>
+
+                    <div className="p-6 sm:p-8 bg-transparent backdrop-blur-md rounded-2xl mt-8">
+                      {suggestionState === 'selecting' && movie.keywords && (
+                        <KeywordSelector keywords={movie.keywords} onFindSimilar={handleFindSimilar} />
+                      )}
+                    </div>
+
                   </div>
+
                 </div>
               </div>
             </div>
 
             {/* Suggestions Section (inside the main container, but outside the backdrop area) */}
             <div className="p-6 sm:p-8 bg-[#7D1AED]/10">
-              {SuggestionsContent}
+              SuggestionsContent
             </div>
           </div>
         </div>

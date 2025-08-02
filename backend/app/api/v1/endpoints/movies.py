@@ -90,7 +90,12 @@ async def search_movies(
     """
     Search for movies by title.
     """
-    movies = await search_movies_by_title(db, query=q)
+    db_movies = await search_movies_by_title(db, query=q)
+    movies = []
+    for movie in db_movies:
+        movie_data = movie.__dict__
+        movie_data["keywords"] = movie.ai_keywords
+        movies.append(movie_data)
     return movies
 
 

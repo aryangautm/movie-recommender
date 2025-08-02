@@ -1,6 +1,6 @@
-from typing import List, Optional
+from typing import List, Optional, Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from datetime import date
 
 
@@ -37,6 +37,11 @@ class MovieSearchResult(BaseModel):
     release_date: Optional[date]
     backdrop_path: Optional[str]
     poster_path: Optional[str]
+    ai_keywords: Optional[List[Any]] = Field(alias="keywords")
+
+    class Config:
+        from_attributes = True
+        populate_by_name = True
 
 
 class SimilarMovie(Movie):
