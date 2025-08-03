@@ -7,6 +7,7 @@ from neo4j import Driver, GraphDatabase, exceptions
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.preprocessing import MultiLabelBinarizer
+from app.utils.scoring import calculate_effective_score
 
 # Add parent directory to path to allow imports from 'app'
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -214,9 +215,17 @@ def calculate_hybrid_similarities(profiles: dict, movies_raw: list):
         source_movie_id = movie_ids[i]
         for target_index in top_indices:
             target_movie_id = movie_ids[target_index]
-            score = round(final_sim_matrix[i, target_index], 4)
+            hybrid_similarity_score = round(final_sim_matrix[i, target_index], 4)
+            initial_effective_score = calculate_effective_score(
+                user_votes=0, ai_score=None, similarity_score=hybrid_similarity_score
+            )
             relationships.append(
-                {"source": source_movie_id, "target": target_movie_id, "score": score}
+                {
+                    "source": source_movie_id,
+                    "target": target_movie_id,
+                    "similarity_score": hybrid_similarity_score,
+                    "effective_score": initial_effective_score,
+                }
             )
 
     return relationships
@@ -248,7 +257,11 @@ def batch_create_relationships(driver: Driver, relationships: list):
     MATCH (a:Movie {tmdb_id: rel.source})
     MATCH (b:Movie {tmdb_id: rel.target})
     MERGE (a)-[r:IS_SIMILAR_TO]->(b)
-    SET r.ai_score = rel.score, r.user_votes = 0
+    SET 
+        r.similarity_score = rel.similarity_score,
+        r.ai_score = null,
+        r.user_votes = 0,
+        r.effective_score = rel.effective_score
     """
     with tqdm(total=len(relationships), desc="Writing to Neo4j") as pbar:
         for i in range(0, len(relationships), RELATIONSHIP_BATCH_SIZE):
@@ -264,7 +277,7 @@ def batch_create_relationships(driver: Driver, relationships: list):
                     raise
                 except Exception as e:
                     print(
-                        f"\nAn error occurred on batch starting at index {a}. Error: {e}. Aborting."
+                        f"\nAn error occurred on batch starting at index {i}. Error: {e}. Aborting."
                     )
                     raise
 

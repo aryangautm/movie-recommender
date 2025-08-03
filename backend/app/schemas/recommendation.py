@@ -1,10 +1,8 @@
 from pydantic import BaseModel, Field
-from typing import List, Literal, Union
-from .movie import MovieSearchResult
-from datetime import date
+from typing import List, Literal, Optional
 
 
-class AdvancedRecommendationRequest(BaseModel):
+class RecRequest(BaseModel):
     """The request body for the advanced similarity search."""
 
     source_movie_id: int = Field(
@@ -17,26 +15,23 @@ class AdvancedRecommendationRequest(BaseModel):
     )
 
 
-class RecommendationResponse(BaseModel):
+class BaseRecResult(BaseModel):
     id: int
     title: str
+    overview: Optional[str]
     release_year: int
     poster_path: str
-    score: float
-
-
-class FallbackMovieResult(RecommendationResponse):
-    overview: str
-
-
-class LLMRecommendationResult(RecommendationResponse):
-    justification: List[str] = Field(
-        ..., description="The LLM's reason for the recommendation."
+    justification: Optional[List[str]] = Field(
+        default_factory=list, description="Keywords that matched the source movie."
     )
 
 
-class AdvancedRecommendationResponse(BaseModel):
+class RecResponse(BaseModel):
     status: Literal["complete", "partial"] = Field(
         ..., description="`complete` if from cache, `partial` if a fallback."
     )
-    results: Union[List[LLMRecommendationResult], List[FallbackMovieResult]]
+    results: List[BaseRecResult]
+
+
+class LLMRecResult(BaseRecResult):
+    ai_score: float = Field(..., description="The LLM's assigned similarity score.")

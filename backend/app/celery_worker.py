@@ -43,40 +43,57 @@ def get_neo4j_driver():
 DRIVER = get_neo4j_driver()
 
 
-@celery_app.task(
-    name="tasks.update_vote_count",
-    bind=True,
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 5},
-)
-def update_vote_count(self, movie_id_1: int, movie_id_2: int):
-    """
-    Celery task to increment the vote count for a movie pair relationship.
-    """
-    logger.info(f"Received task to update vote between {movie_id_1} and {movie_id_2}")
-    try:
-        success = crud_vote.increment_user_vote_in_graph(DRIVER, movie_id_1, movie_id_2)
-        if success:
-            logger.info(
-                f"Successfully updated vote for pair ({movie_id_1}, {movie_id_2})"
-            )
-        else:
-            logger.warning(
-                f"Could not find relationship to update for pair ({movie_id_1}, {movie_id_2})"
-            )
-    except Exception as e:
-        logger.error(
-            f"Task failed for pair ({movie_id_1}, {movie_id_2}). Retrying... Error: {e}"
-        )
-        raise self.retry(exc=e)
-
-
 @worker_shutdown.connect
 def shutdown_neo4j_driver(**kwargs):
     global neo4j_driver
     if neo4j_driver:
         neo4j_driver.close()
         logger.info("Neo4j driver for Celery worker shut down.")
+
+
+@celery_app.task(
+    name="tasks.process_similarity_vote",
+    bind=True,
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 5},
+)
+def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
+    """
+    The single source of truth for processing a similarity vote.
+    It recalculates and updates the effective_score on the graph edge.
+    """
+    logger.info(f"Processing similarity vote between {movie_id_1} and {movie_id_2}")
+    try:
+        global DRIVER
+        if not DRIVER or not DRIVER.is_open():
+            DRIVER = get_neo4j_driver()
+
+        try:
+            with SessionLocal() as db:
+                if rec_id := crud_recommendation.is_recommendation(
+                    db, movie_id_1, movie_id_2
+                ):
+                    crud_recommendation.increment_recommendation_vote(db, rec_id)
+        except Exception as e:
+            logger.error(
+                f"Failed to increment recommendation vote for {movie_id_1}, {movie_id_2}: {e}"
+            )
+            pass
+
+        success = crud_vote.process_similarity_vote_in_graph(
+            DRIVER, movie_id_1, movie_id_2
+        )
+
+        if success:
+            logger.info("Successfully processed vote and updated effective_score.")
+        else:
+            logger.warning("Vote processing failed for an unknown reason.")
+
+    except Exception as e:
+        logger.error(
+            f"Task failed for vote between ({movie_id_1}, {movie_id_2}). Error: {e}"
+        )
+        raise self.retry(exc=e)
 
 
 # @celery_app.task(
@@ -87,7 +104,7 @@ def shutdown_neo4j_driver(**kwargs):
 # def ingest_new_movies(movies_data: List[Dict[str, Any]]):
 #     """
 #     Celery task to ingest a list of new movies into the PostgreSQL database.
-#     This is a synchronous task that safely runs an async block for DB operations.
+#     Called from trending endpoint.
 #     """
 #     if not movies_data:
 #         logger.info("ingest_new_movies task received with no data. Exiting.")
@@ -95,7 +112,6 @@ def shutdown_neo4j_driver(**kwargs):
 
 #     logger.info(f"Received task to ingest {len(movies_data)} new movies.")
 
-#     # The synchronous part of the task prepares the data.
 #     genre_map = tmdb_client.get_genre_map()
 #     if not genre_map:
 #         logger.error("Could not fetch genre map. Aborting ingestion task.")
@@ -116,7 +132,7 @@ def shutdown_neo4j_driver(**kwargs):
 #                 "id": movie_data.get("id"),
 #                 "title": movie_data.get("title"),
 #                 "overview": movie_data.get("overview"),
-#                 "release_date": release_date_str,
+#                 "release_date": datetime.fromisoformat(release_date_str).date(),
 #                 "release_year": release_year_int,
 #                 "poster_path": movie_data.get("poster_path"),
 #                 "backdrop_path": movie_data.get("backdrop_path"),
@@ -124,35 +140,14 @@ def shutdown_neo4j_driver(**kwargs):
 #             }
 #         )
 
-#     # This function defines the async database work.
-#     async def run_database_operations():
-#         logger.info(f"Connecting to async DB to ingest {len(movies_to_create)} movies.")
-#         async with AsyncSessionLocal() as db:
-#             try:
-#                 for movie in movies_to_create:
-#                     release_date_str = movie.get("release_date")
-#                     if release_date_str and isinstance(release_date_str, str):
-#                         try:
-#                             movie["release_date"] = datetime.fromisoformat(
-#                                 release_date_str
-#                             ).date()
-#                         except ValueError:
-#                             movie["release_date"] = None
-#                     else:
-#                         movie["release_date"] = None
-#                 await crud_movie.bulk_patch_movies(db, movies_to_create)
-#                 logger.info("Async database ingestion successful.")
-#             except Exception as e:
-#                 # The context manager handles rollback automatically.
-#                 logger.error(f"Async database ingestion failed: {e}")
-#                 raise
-
-#     # asyncio.run() executes the async block and waits for it to complete.
-#     try:
-#         asyncio.run(run_database_operations())
-#     except Exception as e:
-#         # Re-raise the exception to trigger Celery's retry mechanism.
-#         raise e
+#     logger.info(f"Connecting to DB to ingest {len(movies_to_create)} movies.")
+#     with SessionLocal() as db:
+#         try:
+#             crud_movie.bulk_create_movies(db, movies_to_create)
+#             logger.info("Database ingestion successful.")
+#         except Exception as e:
+#             logger.error(f"Database ingestion failed: {e}")
+#             raise
 
 
 @celery_app.task(
@@ -176,10 +171,8 @@ def generate_and_cache_llm_rec(
     print(f"Parsed {len(parsed_recs)} recommendations from LLM output.")
 
     with SessionLocal() as db:
-        # Enrich with DB data (IDs, posters)
         enriched_recs = crud_movie.enrich_recommendations_with_db_data(db, parsed_recs)
 
-        # Prepare data for Postgres insertion
         recs_to_save = [
             {
                 "source_movie_id": source_movie_id,
@@ -191,13 +184,10 @@ def generate_and_cache_llm_rec(
             for rec in enriched_recs
         ]
 
-        # --- THE CRITICAL UPDATE ---
-        # Save to Postgres to get IDs, and get the data back enriched with those IDs
         final_recs_with_ids = crud_recommendation.bulk_create_llm_recommendations(
             db, recs_to_save
         )
 
-        # Now, merge the final data for caching
         final_cached_data = []
         rec_map = {rec["recommended_movie_id"]: rec for rec in final_recs_with_ids}
         for enriched_rec in enriched_recs:
@@ -205,36 +195,7 @@ def generate_and_cache_llm_rec(
             if db_rec:
                 final_cached_data.append({**enriched_rec, "id": db_rec["id"]})
 
-    # Cache the ID-enriched result in Redis
     with sync_get_redis_client() as redis_client:
         crud_cache.cache_llm_recommendation(
             redis_client, f"llm_rec:{trigger_hash}", final_cached_data
-        )
-
-
-@celery_app.task(name="tasks.process_recommendation_vote")
-def process_recommendation_vote(recommendation_id: int):
-    """
-    Handles a user's 'Agree?' vote on an LLM recommendation.
-    1. Increments the vote in PostgreSQL.
-    2. Dispatches a task to update the core Neo4j graph.
-    """
-
-    logger.info(f"Processing vote for recommendation ID: {recommendation_id}")
-    with SessionLocal() as db:
-        # Atomically increment the vote and get the movie IDs back
-        movie_pair = crud_recommendation.increment_recommendation_vote(
-            db, recommendation_id
-        )
-
-    if movie_pair:
-        source_id, target_id = movie_pair
-        logger.info(
-            f"Vote recorded. Promoting link between movies {source_id} and {target_id}."
-        )
-        # Dispatch the existing task to strengthen the Neo4j graph
-        celery_app.send_task("tasks.update_vote_count", args=[source_id, target_id])
-    else:
-        logger.warning(
-            f"Could not find recommendation with ID {recommendation_id} to process vote."
         )
