@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Set, Callable
 from sqlalchemy import select, or_, and_
-from neo4j import Driver, exceptions
+from neo4j import Driver
 from sqlalchemy import insert, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,9 +8,13 @@ from sqlalchemy.future import select
 
 from ..models.movie import Movie
 from app.schemas.movie import MovieSearchResult
-from app.schemas.recommendation import LLMRecommendationResult
+from app.schemas.recommendation import LLMRecResult
 from sqlalchemy.orm import Session
 from datetime import datetime
+
+
+def chunker(seq, size):
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
 
 
 async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
@@ -18,15 +22,22 @@ async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
     return {id_tuple[0] for id_tuple in result.all()}
 
 
-async def bulk_create_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
+def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
     if not movies:
         return
-    await db.execute(insert(Movie), movies)
-    await db.commit()
 
+    BATCH_SIZE = 1000
 
-def chunker(seq, size):
-    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+    for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
+        print(f"Creating movies: Batch {i+1} with {len(movie_batch)} movies")
+        try:
+            db.execute(insert(Movie), movie_batch)
+            db.commit()
+        except Exception as e:
+            with open("error_log.txt", "a") as error_file:
+                error_file.write(f"Error during bulk create: {e}\n")
+            db.rollback()
+            print(f"Error during batch {i+1}: {e}")
 
 
 async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
@@ -40,11 +51,9 @@ async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
 
     BATCH_SIZE = 1000  # This will create about 13,000 parameters per batch, well under the 32k limit.
 
-    # Process the movies in batches
     for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
         print(f"Processing batch {i+1} with {len(movie_batch)} movies...")
         try:
-            # The core upsert logic is the same, but applied to the BATCH
             stmt = insert(Movie.__table__).values(movie_batch)
 
             update_dict = {c.name: c for c in stmt.excluded if c.name != "id"}
@@ -54,7 +63,7 @@ async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
             )
 
             await db.execute(upsert_stmt)
-            await db.commit()  # Commit after each successful batch
+            await db.commit()
         except Exception as e:
             with open("error_log.txt", "a") as error_file:
                 error_file.write(f"Error during bulk upsert: {e}\n")
@@ -169,54 +178,6 @@ async def search_movies_by_title(
     return result.scalars().all()
 
 
-def get_similar_movies_from_graph(
-    driver: Driver, movie_id: int, limit: int = 20
-) -> List[Dict[str, Any]]:
-    """
-    Finds movies similar to the given movie_id from Neo4j.
-    Returns a list of dictionaries with tmdb_id, ai_score, and user_votes.
-    """
-    query = """
-    MATCH (source:Movie {tmdb_id: $id})-[r:IS_SIMILAR_TO]->(target:Movie)
-    RETURN target.tmdb_id AS tmdb_id, r.ai_score AS ai_score, r.user_votes AS user_votes
-    ORDER BY r.ai_score DESC
-    LIMIT $limit
-    """
-    with driver.session() as session:
-        result = session.run(query, id=movie_id, limit=limit)
-        return [record.data() for record in result]
-
-
-def increment_user_vote_in_graph(
-    driver: Driver, movie_id_1: int, movie_id_2: int
-) -> bool:
-    """
-    Finds the relationship between two movies and atomically increments the
-    user_votes counter. This is designed to be idempotent.
-    Returns True on success, False on failure (e.g., relationship not found).
-    """
-    # The query will only update the relationship
-    # if it already exists between the two specified nodes.
-    query = """
-    MATCH (a:Movie {tmdb_id: $id1})
-    MATCH (b:Movie {tmdb_id: $id2})
-    MERGE (a)-[r:IS_SIMILAR_TO]-(b)
-    SET r.user_votes = coalesce(r.user_votes, 0) + 1
-    RETURN r
-    """
-    try:
-        with driver.session() as session:
-            result = session.run(query, id1=movie_id_1, id2=movie_id_2)
-            # Check if the update actually found and returned a relationship
-            return result.single() is not None
-    except exceptions.ServiceUnavailable:
-        # Re-raise the exception so Celery's retry mechanism can catch it
-        raise
-    except Exception as e:
-        print(f"An unexpected error occurred while incrementing vote: {e}")
-        return False
-
-
 async def filter_existing_movie_ids(db: AsyncSession, movie_ids: List[int]) -> Set[int]:
     """
     Takes a list of movie IDs and returns a set containing only the IDs
@@ -244,83 +205,6 @@ async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> S
         return {row[0] for row in result.all()}
 
 
-async def get_movie_title_by_id(db: AsyncSession, movie_id: int) -> str | None:
-    """Fetches just the title of a movie by its ID."""
-    result = await db.execute(select(Movie.title).where(Movie.id == movie_id))
-    title = result.scalar_one_or_none()
-    return title
-
-
-async def get_fallback_recommendations(
-    db: AsyncSession, driver: Driver, source_movie_id: int, selected_keywords: List[str]
-) -> List[Dict[str, Any]]:
-    """
-    Generates an instant, high-quality fallback recommendation list.
-    1. Fetches base similarities from the Neo4j graph.
-    2. Enriches them with data from PostgreSQL.
-    3. Re-ranks them based on keyword overlap.
-    """
-    # Step 1: Get base similarity from Neo4j (this is synchronous, let FastAPI handle the thread)
-    base_similar_movies = get_similar_movies_from_graph(
-        driver, movie_id=source_movie_id, limit=50
-    )
-    if not base_similar_movies:
-        return []
-
-    similar_ids = [m["tmdb_id"] for m in base_similar_movies]
-
-    # Step 2: Fetch full metadata and AI keywords for the source and similar movies from Postgres
-    all_ids_to_fetch = [source_movie_id] + similar_ids
-    query = select(
-        Movie.id,
-        Movie.title,
-        Movie.release_year,
-        Movie.poster_path,
-        Movie.ai_keywords,
-    ).where(Movie.id.in_(all_ids_to_fetch))
-    result = await db.execute(query)
-    movies_data = {row.id: row for row in result.all()}
-
-    source_movie = movies_data.get(source_movie_id)
-    if not source_movie or not source_movie.ai_keywords:
-        # If source has no keywords, we can't calculate overlap, so return generic list
-        return [
-            {**m, "keyword_match_score": 0.0}
-            for m in base_similar_movies[:20]
-            if m["tmdb_id"] in movies_data
-        ]
-
-    selected_keywords_set = set(selected_keywords)
-
-    # Step 3: Calculate keyword overlap score and re-rank
-    ranked_results = []
-    for movie_info in base_similar_movies:
-        movie_id = movie_info["tmdb_id"]
-        if movie_id in movies_data and movies_data[movie_id].ai_keywords:
-            target_keywords_set = set(movies_data[movie_id].ai_keywords)
-
-            # Calculate Jaccard similarity for keyword overlap
-            intersection = len(selected_keywords_set.intersection(target_keywords_set))
-            union = len(selected_keywords_set.union(target_keywords_set))
-            score = intersection / union if union > 0 else 0.0
-
-            movie_record = movies_data[movie_id]
-            ranked_results.append(
-                {
-                    "id": movie_record.id,
-                    "title": movie_record.title,
-                    "release_year": movie_record.release_year,
-                    "poster_path": movie_record.poster_path,
-                    "keywords": movie_record.ai_keywords,
-                    "score": score,
-                }
-            )
-
-    # Sort primarily by keyword match, then limit to top 20
-    ranked_results.sort(key=lambda x: x["score"], reverse=True)
-    return ranked_results[:20]
-
-
 def enrich_recommendations_with_db_data(
     db: Session, parsed_recs: Dict[str, List[Dict[str, Any]]]
 ) -> Dict[str, Any]:
@@ -328,14 +212,8 @@ def enrich_recommendations_with_db_data(
     Takes a list of recommendations parsed from an LLM and enriches them
     with structured data from our PostgreSQL database.
 
-    This function is designed to be highly efficient by:
-    1. Constructing a single dynamic query to fetch all movies at once.
-    2. Filtering out any "hallucinated" movies suggested by the LLM that
-       do not exist in our database.
-    3. Merging the LLM's justification and score with our database's structured data.
-
     Args:
-        db: The asynchronous SQLAlchemy session.
+        db: The SQLAlchemy session.
         parsed_recs: A Dict[List], e.g.,
                     {movies:[{'movie_title': 'The Prestige', 'release_year': 2006, ...}, ...]}
 
@@ -345,7 +223,6 @@ def enrich_recommendations_with_db_data(
     if not parsed_recs and not parsed_recs.get("movies"):
         return []
 
-    # --- Step 1: Build the dynamic query conditions ---
     search_conditions = []
     for rec in parsed_recs.get("movies", []):
         title = rec.get("movie_title")
@@ -366,12 +243,10 @@ def enrich_recommendations_with_db_data(
     result = db.execute(query)
     db_movies = result.scalars().all()
 
-    # The key is a tuple of (lowercase title, year) to handle case-insensitivity.
     db_movie_map = {
         (movie.title.lower(), movie.release_year): movie for movie in db_movies
     }
 
-    # --- Step 4: Enrich and Filter ---
     final_results = []
     for rec in parsed_recs.get("movies", []):
         title = rec.get("movie_title")
@@ -380,22 +255,63 @@ def enrich_recommendations_with_db_data(
         if not (title and year):
             continue
 
-        # Find the corresponding movie from our database using the map
         matched_movie = db_movie_map.get((title.lower(), year))
 
         if matched_movie:
-            # A match was found! This is a valid recommendation.
-            # We construct the final object using our Pydantic schema for validation.
-            final_object = LLMRecommendationResult(
+            final_object = LLMRecResult(
                 id=matched_movie.id,
                 title=matched_movie.title,
                 release_year=matched_movie.release_year,
                 poster_path=matched_movie.poster_path,
-                justification=rec.get(
-                    "justification_keywords", "No justification provided."
-                ),
+                justification=rec.get("justification_keywords", []),
                 ai_score=rec.get("similarity_score", 0.0),
             )
             final_results.append(final_object.model_dump())
+
+    return final_results
+
+
+async def get_fallback_recommendations(
+    db: AsyncSession, driver: Driver, source_movie_id: int
+) -> List[Dict[str, Any]]:
+
+    query = """
+    MATCH (source:Movie {tmdb_id: $id})-[r:IS_SIMILAR_TO]->(target:Movie)
+    RETURN target.tmdb_id AS tmdb_id, r.effective_score AS effective_score
+    ORDER BY r.effective_score DESC
+    LIMIT 20
+    """
+    with driver.session() as session:
+        result = session.run(query, id=source_movie_id)
+        ranked_recs_from_graph = [
+            {"id": record["tmdb_id"], "effective_score": record["effective_score"]}
+            for record in result
+        ]
+
+    if not ranked_recs_from_graph:
+        return []
+
+    similar_ids = [rec["id"] for rec in ranked_recs_from_graph]
+
+    query = select(Movie.id, Movie.title, Movie.release_year, Movie.poster_path).where(
+        Movie.id.in_(similar_ids)
+    )
+    result = await db.execute(query)
+
+    movies_data_map = {row.id: row for row in result.all()}
+
+    final_results = []
+    for rec in ranked_recs_from_graph:
+        movie_data = movies_data_map.get(rec["id"])
+        if movie_data:
+            final_results.append(
+                {
+                    "id": movie_data.id,
+                    "title": movie_data.title,
+                    "overview": movie_data.overview,
+                    "release_year": movie_data.release_year,
+                    "poster_path": movie_data.poster_path,
+                }
+            )
 
     return final_results

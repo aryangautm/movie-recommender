@@ -1,11 +1,10 @@
 import hashlib
-import asyncio
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from neo4j import Driver
 
-from app import schemas, crud
+from app import schemas
 from app.celery_worker import celery_app
 from app.core.database import get_async_db
 from app.core.redis import get_redis_client
@@ -16,26 +15,29 @@ router = APIRouter()
 
 
 @router.post(
-    "/similar",
-    response_model=schemas.recommendation.AdvancedRecommendationResponse,
+    "/",
+    response_model=schemas.recommendation.RecResponse,
     status_code=status.HTTP_200_OK,
 )
 async def get_advanced_recommendations(
-    request: schemas.recommendation.AdvancedRecommendationRequest,
+    request: schemas.recommendation.RecRequest,
     db: AsyncSession = Depends(get_async_db),
     redis_client: redis.Redis = Depends(get_redis_client),
     driver: Driver = Depends(get_graph_driver),
 ):
+
     source_movie = await crud_movie.get_movie_by_id(db, request.source_movie_id)
     if not source_movie:
         raise HTTPException(
-            status_code=404,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Source movie with ID {request.source_movie_id} not found.",
         )
-    if not set(request.selected_keywords).issubset(source_movie.ai_keywords):
+
+    valid_keywords = source_movie.ai_keywords or []
+    if not set(request.selected_keywords).issubset(valid_keywords):
         raise HTTPException(
-            status_code=400,
-            detail=f"Keywords {request.selected_keywords} are not a valid",
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="One or more selected keywords are not valid for this movie.",
         )
 
     keywords_str = "".join(sorted(request.selected_keywords))
@@ -50,7 +52,6 @@ async def get_advanced_recommendations(
     if cached_result:
         return {
             "status": "complete",
-            "message": "Serving a tailored recommendation from cache.",
             "results": cached_result,
         }
 

@@ -29,6 +29,18 @@ def bulk_create_llm_recommendations(
     return recommendations_data
 
 
+def is_recommendation(db: Session, movie_id_1: int, movie_id_2: int) -> bool:
+    if movie_id_1 == movie_id_2:
+        return None
+
+    stmt = select(LlmRecommendation).where(
+        (LlmRecommendation.source_movie_id == movie_id_1)
+        & (LlmRecommendation.recommended_movie_id == movie_id_2)
+    )
+    result = db.execute(stmt)
+    return result.scalar_one_or_none()
+
+
 async def get_recommendation_by_id(
     db: AsyncSession, rec_id: int
 ) -> Optional[LlmRecommendation]:
@@ -68,8 +80,6 @@ async def get_recommendations_by_trigger_hash(
     Fetches all recommendations for a given trigger hash and enriches them
     with movie details for the frontend.
     """
-    # Create a query to join LlmRecommendation with the Movie table
-    # to get details of the recommended movie in one go.
     stmt = (
         select(
             LlmRecommendation.id.label("recommendation_id"),
@@ -88,7 +98,6 @@ async def get_recommendations_by_trigger_hash(
     result = await db.execute(stmt)
     rows = result.all()
 
-    # Format the data to match the expected API response structure
     recommendations = [
         {
             "id": row.id,
