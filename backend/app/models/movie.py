@@ -15,6 +15,7 @@ class Movie(Base):
     poster_path = Column(String, nullable=True)
     genres = Column(JSON, nullable=True)
     release_date = Column(Date, nullable=True)
+    release_year = Column(Integer, nullable=True, default=None)
     backdrop_path = Column(String, nullable=True)
     keywords = Column(JSON, nullable=True)
     director = Column(JSON, nullable=True)  # Storing as JSON to hold name and ID

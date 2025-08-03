@@ -11,3 +11,16 @@ class VoteCreate(BaseModel):
 
 class VoteResponse(BaseModel):
     message: str
+
+
+class Fingerprint(BaseModel):
+    """
+    A simple schema to receive the user's browser fingerprint ID in a request body.
+    This is used to identify a user for rate-limiting purposes without requiring an account.
+    """
+
+    id: str = Field(
+        ...,
+        description="The unique browser fingerprint ID of the user.",
+        example="a_unique_fingerprint_string_12345",
+    )

@@ -209,22 +209,18 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
                         {movie.overview}
                       </p>
                     </div>
-
-                    <div className="p-6 sm:p-8 bg-transparent backdrop-blur-md rounded-2xl mt-8">
-                      {suggestionState === 'selecting' && movie.keywords && (
-                        <KeywordSelector keywords={movie.keywords} onFindSimilar={handleFindSimilar} />
-                      )}
-                    </div>
-
                   </div>
-
                 </div>
               </div>
             </div>
 
             {/* Suggestions Section (inside the main container, but outside the backdrop area) */}
             <div className="p-6 sm:p-8 bg-[#7D1AED]/10">
-              SuggestionsContent
+              {suggestionState === 'selecting' && movie.keywords ? (
+                <KeywordSelector keywords={movie.keywords} onFindSimilar={handleFindSimilar} />
+              ) : (
+                SuggestionsContent
+              )}
             </div>
           </div>
         </div>

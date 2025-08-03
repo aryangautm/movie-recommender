@@ -7,7 +7,7 @@ from tqdm import tqdm
 from typing import List, Dict, Any, Set
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
+from datetime import datetime
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.crud import crud_movie
@@ -19,7 +19,7 @@ API_MAX_PAGE_LIMIT = 500
 # Limit concurrent requests to TMDb to avoid getting rate-limited
 MAX_CONCURRENT_REQUESTS = 10
 # Filter out movies with very few votes to improve data quality
-MINIMUM_VOTE_COUNT = 50
+MINIMUM_VOTE_COUNT = 0
 # Path for local data backup
 BACKUP_FILE_PATH = "scripts/movies_backup.json"
 
@@ -38,7 +38,8 @@ async def discover_movie_ids(client: httpx.AsyncClient) -> Set[int]:
             "sort_by": "popularity.desc",
             "page": page,
             "include_adult": False,
-            "vote_count.gte": MINIMUM_VOTE_COUNT,  # Only get movies with a decent number of votes
+            "release_date.lte": datetime.now().date(),
+            "vote_count.gte": MINIMUM_VOTE_COUNT,
         }
         tasks.append(client.get(f"{TMDB_API_URL}/discover/movie", params=params))
 
@@ -57,7 +58,6 @@ async def discover_movie_ids(client: httpx.AsyncClient) -> Set[int]:
             ...
             # print(f"An error occurred during discovery: {e}. Skipping.")
 
-    print(f"Discovered {len(discovered_ids)} unique movie IDs.")
     return discovered_ids
 
 
@@ -87,7 +87,7 @@ async def fetch_full_movie_details(
                     response.raise_for_status()
                     return response.json()
                 except httpx.HTTPStatusError:
-                    # It's okay if a single movie fails, we just skip it.
+                    # It's okay if a single movie fails, just skip it.
                     return None
 
         tasks.append(fetch_one(movie_id))
@@ -129,13 +129,15 @@ def process_and_format_movies(
             {"id": p["id"], "name": p["name"]}
             for p in data.get("credits", {}).get("cast", [])[:5]
         ]
-
+        release_data = data.get("release_date", "")
+        release_year = int(release_data.split("-")[0]) if release_data else None
         processed_movies.append(
             {
                 "id": data["id"],
                 "title": data.get("title"),
                 "overview": data.get("overview"),
-                "release_date": data.get("release_date"),
+                "release_date": release_data,
+                "release_year": release_year,
                 "poster_path": data.get("poster_path"),
                 "backdrop_path": data.get("backdrop_path"),
                 "genres": data.get("genres", []),
@@ -154,18 +156,19 @@ async def main():
     """Main orchestration function for the entire ingestion process."""
 
     # --- Stage 1: Discover Movie IDs ---
-    async with httpx.AsyncClient(timeout=20.0) as client:
-        # existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
-        # print(f"Found {len(existing_db_ids)} movies already in the database.")
+    # async with httpx.AsyncClient(timeout=20.0) as client:
+    #     existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+    #     print(f"Found {len(existing_db_ids)} movies already in the database.")
 
-        # discovered_ids = await discover_movie_ids(client)
-        # new_ids_to_fetch = discovered_ids - existing_db_ids
+    #     discovered_ids = await discover_movie_ids(client)
+    #     new_ids_to_fetch = discovered_ids - existing_db_ids
+    #     print(f"Discovered {len(new_ids_to_fetch)} new movie IDs to fetch.")
 
-        new_ids_to_fetch = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+    #     if not new_ids_to_fetch:
+    #         print("No new movies to ingest. Exiting.")
+    #         return
 
-        if not new_ids_to_fetch:
-            print("No new movies to ingest. Exiting.")
-            return
+    new_ids_to_fetch = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
 
     # --- Stage 2: Fetch Full Details for New Movies ---
     async with httpx.AsyncClient(timeout=20.0) as client:

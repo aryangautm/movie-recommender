@@ -69,6 +69,10 @@ async def process_results_and_update_db():
                             k.strip() for k in keyword_str.split(",") if k.strip()
                         ]
 
+                        keyword_list = [
+                            k.replace(".", "").title() for k in keyword_list
+                        ]
+
                         if keyword_list:
                             movies_data_to_upsert.append(
                                 {"id": movie_id, "ai_keywords": keyword_list}

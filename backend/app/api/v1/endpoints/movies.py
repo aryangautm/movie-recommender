@@ -19,7 +19,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from neo4j import Driver
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tmdb_client import tmdb_client
-from app.celery_worker import celery_app
 
 router = APIRouter()
 CACHE_TTL_SECONDS = 86400
@@ -76,7 +75,7 @@ async def get_trending_movies(
                 movie for movie in trending_movies if movie["id"] in new_movie_ids
             ]
             # Dispatch the background task and DO NOT wait for it
-            celery_app.send_task("tasks.ingest_new_movies", args=[new_movies_data])
+            # celery_app.send_task("tasks.ingest_new_movies", args=[new_movies_data])
 
     # 5. Return the response to the user immediately
     return trending_data
@@ -85,16 +84,19 @@ async def get_trending_movies(
 @router.get("/search", response_model=List[MovieSearchResult])
 async def search_movies(
     q: str = Query(..., min_length=3, description="Search query for movie titles"),
+    limit: int = Query(5, ge=1, le=40, description="Number of results to return"),
     db: AsyncSession = Depends(get_async_db),
 ):
     """
     Search for movies by title.
     """
-    db_movies = await search_movies_by_title(db, query=q)
+    db_movies = await search_movies_by_title(db, query=q, limit=limit)
     movies = []
     for movie in db_movies:
         movie_data = movie.__dict__
-        movie_data["keywords"] = movie.ai_keywords
+        movie_data["keywords"] = [
+            keyword.replace(".", "").title() for keyword in movie.ai_keywords or []
+        ]
         movies.append(movie_data)
     return movies
 
@@ -134,12 +136,14 @@ async def read_similar_movies(
     movie_map = {movie.id: movie for movie in similar_movie_objects}
 
     response = []
+
     for data in similar_movies_data:
         movie_obj = movie_map.get(data["tmdb_id"])
+        print(data)
         if movie_obj:
             similar_movie = SimilarMovie(
                 **movie_obj.__dict__,
-                ai_score=data["ai_score"],
+                ai_score=data["ai_score"] if data.get("ai_score") else 0.0,
                 user_votes=data["user_votes"],
             )
             response.append(similar_movie)
