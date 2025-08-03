@@ -1,5 +1,5 @@
 from typing import Any, Dict, List, Set, Callable
-
+from sqlalchemy import select, or_, and_
 from neo4j import Driver, exceptions
 from sqlalchemy import insert, func
 from sqlalchemy.dialects.postgresql import insert
@@ -7,7 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
 from ..models.movie import Movie
-from app.schemas.movie import MovieSearchResult, Genre
+from app.schemas.movie import MovieSearchResult
+from app.schemas.recommendation import LLMRecommendationResult
+from sqlalchemy.orm import Session
+from datetime import datetime
 
 
 async def get_existing_movie_ids(db: AsyncSession) -> Set[int]:
@@ -121,7 +124,13 @@ async def get_movie_by_id(db: AsyncSession, movie_id: int) -> Movie | None:
     return result.scalars().first()
 
 
-async def get_movies_by_ids(db: AsyncSession, movie_ids: List[int]) -> List[Movie]:
+def sync_get_movie_by_id(db: Session, movie_id: int) -> Movie | None:
+    """Fetches a single movie by its ID from PostgreSQL."""
+    result = db.execute(select(Movie).filter(Movie.id == movie_id))
+    return result.scalars().first()
+
+
+async def get_movies_by_ids(db: Session, movie_ids: List[int]) -> List[Movie]:
     """Fetches multiple movies by their IDs from PostgreSQL."""
     if not movie_ids:
         return []
@@ -151,7 +160,7 @@ async def search_movies_by_title(
 
     stmt = (
         select(Movie, rank)
-        .filter(match_condition)
+        .filter(match_condition, Movie.release_date < datetime.now().date())
         .order_by(rank.desc(), Movie.vote_count.desc().nulls_last())
         .limit(limit)
     )
@@ -191,7 +200,6 @@ def increment_user_vote_in_graph(
     query = """
     MATCH (a:Movie {tmdb_id: $id1})
     MATCH (b:Movie {tmdb_id: $id2})
-    // We match the relationship in either direction
     MERGE (a)-[r:IS_SIMILAR_TO]-(b)
     SET r.user_votes = coalesce(r.user_votes, 0) + 1
     RETURN r
@@ -228,5 +236,166 @@ async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> S
     Efficiently fetches all existing movie IDs from the database.
     """
     async with db_session_factory() as db:
-        result = await db.execute(select(Movie.id).filter(Movie.vote_count == 0))
+        result = await db.execute(
+            select(Movie.id).filter(
+                Movie.title.is_(None),
+            )
+        )
         return {row[0] for row in result.all()}
+
+
+async def get_movie_title_by_id(db: AsyncSession, movie_id: int) -> str | None:
+    """Fetches just the title of a movie by its ID."""
+    result = await db.execute(select(Movie.title).where(Movie.id == movie_id))
+    title = result.scalar_one_or_none()
+    return title
+
+
+async def get_fallback_recommendations(
+    db: AsyncSession, driver: Driver, source_movie_id: int, selected_keywords: List[str]
+) -> List[Dict[str, Any]]:
+    """
+    Generates an instant, high-quality fallback recommendation list.
+    1. Fetches base similarities from the Neo4j graph.
+    2. Enriches them with data from PostgreSQL.
+    3. Re-ranks them based on keyword overlap.
+    """
+    # Step 1: Get base similarity from Neo4j (this is synchronous, let FastAPI handle the thread)
+    base_similar_movies = get_similar_movies_from_graph(
+        driver, movie_id=source_movie_id, limit=50
+    )
+    if not base_similar_movies:
+        return []
+
+    similar_ids = [m["tmdb_id"] for m in base_similar_movies]
+
+    # Step 2: Fetch full metadata and AI keywords for the source and similar movies from Postgres
+    all_ids_to_fetch = [source_movie_id] + similar_ids
+    query = select(
+        Movie.id,
+        Movie.title,
+        Movie.release_year,
+        Movie.poster_path,
+        Movie.ai_keywords,
+    ).where(Movie.id.in_(all_ids_to_fetch))
+    result = await db.execute(query)
+    movies_data = {row.id: row for row in result.all()}
+
+    source_movie = movies_data.get(source_movie_id)
+    if not source_movie or not source_movie.ai_keywords:
+        # If source has no keywords, we can't calculate overlap, so return generic list
+        return [
+            {**m, "keyword_match_score": 0.0}
+            for m in base_similar_movies[:20]
+            if m["tmdb_id"] in movies_data
+        ]
+
+    selected_keywords_set = set(selected_keywords)
+
+    # Step 3: Calculate keyword overlap score and re-rank
+    ranked_results = []
+    for movie_info in base_similar_movies:
+        movie_id = movie_info["tmdb_id"]
+        if movie_id in movies_data and movies_data[movie_id].ai_keywords:
+            target_keywords_set = set(movies_data[movie_id].ai_keywords)
+
+            # Calculate Jaccard similarity for keyword overlap
+            intersection = len(selected_keywords_set.intersection(target_keywords_set))
+            union = len(selected_keywords_set.union(target_keywords_set))
+            score = intersection / union if union > 0 else 0.0
+
+            movie_record = movies_data[movie_id]
+            ranked_results.append(
+                {
+                    "id": movie_record.id,
+                    "title": movie_record.title,
+                    "release_year": movie_record.release_year,
+                    "poster_path": movie_record.poster_path,
+                    "keywords": movie_record.ai_keywords,
+                    "score": score,
+                }
+            )
+
+    # Sort primarily by keyword match, then limit to top 20
+    ranked_results.sort(key=lambda x: x["score"], reverse=True)
+    return ranked_results[:20]
+
+
+def enrich_recommendations_with_db_data(
+    db: Session, parsed_recs: Dict[str, List[Dict[str, Any]]]
+) -> Dict[str, Any]:
+    """
+    Takes a list of recommendations parsed from an LLM and enriches them
+    with structured data from our PostgreSQL database.
+
+    This function is designed to be highly efficient by:
+    1. Constructing a single dynamic query to fetch all movies at once.
+    2. Filtering out any "hallucinated" movies suggested by the LLM that
+       do not exist in our database.
+    3. Merging the LLM's justification and score with our database's structured data.
+
+    Args:
+        db: The asynchronous SQLAlchemy session.
+        parsed_recs: A Dict[List], e.g.,
+                    {movies:[{'movie_title': 'The Prestige', 'release_year': 2006, ...}, ...]}
+
+    Returns:
+        A list of dictionaries matching the LLMRecommendationResult schema, ready for caching.
+    """
+    if not parsed_recs and not parsed_recs.get("movies"):
+        return []
+
+    # --- Step 1: Build the dynamic query conditions ---
+    search_conditions = []
+    for rec in parsed_recs.get("movies", []):
+        title = rec.get("movie_title")
+        year = rec.get("release_year")
+
+        if title and isinstance(title, str) and year and isinstance(year, int):
+            tsquery_str = " & ".join([part + ":*" for part in title.strip().split()])
+            match_condition = func.to_tsvector("english", Movie.title).op("@@")(
+                func.to_tsquery("english", tsquery_str)
+            )
+            condition = and_(match_condition, Movie.release_year == year)
+            search_conditions.append(condition)
+
+    if not search_conditions:
+        return []
+
+    query = select(Movie).where(or_(*search_conditions))
+    result = db.execute(query)
+    db_movies = result.scalars().all()
+
+    # The key is a tuple of (lowercase title, year) to handle case-insensitivity.
+    db_movie_map = {
+        (movie.title.lower(), movie.release_year): movie for movie in db_movies
+    }
+
+    # --- Step 4: Enrich and Filter ---
+    final_results = []
+    for rec in parsed_recs.get("movies", []):
+        title = rec.get("movie_title")
+        year = rec.get("release_year")
+
+        if not (title and year):
+            continue
+
+        # Find the corresponding movie from our database using the map
+        matched_movie = db_movie_map.get((title.lower(), year))
+
+        if matched_movie:
+            # A match was found! This is a valid recommendation.
+            # We construct the final object using our Pydantic schema for validation.
+            final_object = LLMRecommendationResult(
+                id=matched_movie.id,
+                title=matched_movie.title,
+                release_year=matched_movie.release_year,
+                poster_path=matched_movie.poster_path,
+                justification=rec.get(
+                    "justification_keywords", "No justification provided."
+                ),
+                ai_score=rec.get("similarity_score", 0.0),
+            )
+            final_results.append(final_object.model_dump())
+
+    return final_results

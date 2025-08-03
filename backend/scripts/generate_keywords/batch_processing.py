@@ -9,7 +9,7 @@ from google.genai import types
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
-
+from datetime import datetime
 from app.core.database import AsyncSessionLocal
 from app.models.movie import Movie
 
@@ -54,7 +54,9 @@ async def fetch_all_movies(session: AsyncSession) -> list:
     try:
         query = (
             select(Movie.id, Movie.title, Movie.release_date)
-            .where(Movie.ai_keywords.is_(None))
+            .where(
+                Movie.ai_keywords.is_(None), Movie.release_date < datetime.now().date()
+            )
             .order_by(Movie.vote_count.desc().nulls_last())
         )
         result = await session.execute(query)
