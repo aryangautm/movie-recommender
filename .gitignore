@@ -211,3 +211,8 @@ __marimo__/
 *.jsonl
 
 batch_job_manifest.csv
+
+error_log.txt
+patch_error_log.txt
+
+local_testing_module.py

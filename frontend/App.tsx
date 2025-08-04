@@ -20,6 +20,15 @@ export interface Movie {
   genres: string[];
   keywords?: string[];
 }
+export interface Suggestion {
+  id: number;
+  title: string;
+  overview: string;
+  releaseYear: number;
+  posterPath: string;
+  justification?: string[];
+}
+
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
