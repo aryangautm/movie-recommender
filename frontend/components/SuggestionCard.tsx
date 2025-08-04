@@ -1,21 +1,20 @@
 
 import React, { useState } from 'react';
-import { Movie } from '../App';
+import { Movie, Suggestion } from '../App';
 import { UpArrowIcon, CheckIcon, SpinnerIcon } from './icons';
 
 interface SuggestionCardProps {
-  movie: Movie;
+  suggestion: Suggestion;
   index: number;
-  onSelectMovie: (movie: Movie) => void;
   onUpvote: () => void;
 }
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
 const POSTER_SIZE = 'w300';
 
-const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectMovie, onUpvote }) => {
-  const posterUrl = movie.posterPath
-    ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${movie.posterPath}`
-    : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(movie.title)}`;
+const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, onUpvote }) => {
+  const posterUrl = suggestion.posterPath
+    ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${suggestion.posterPath}`
+    : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(suggestion.title)}`;
 
   const [upvoteState, setUpvoteState] = useState<'idle' | 'loading' | 'success'>('idle');
 
@@ -38,20 +37,24 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
   return (
     <div className="flex items-start gap-4">
       <span className="text-xl font-medium text-white/50 pt-3">{index}.</span>
-      <div className="flex-grow bg-white/[.03] hover:bg-white/10 p-3 rounded-2xl flex items-center gap-4 transition-all duration-300 border border-white/10 cursor-pointer group" onClick={() => onSelectMovie(movie)}>
+      <div className="flex-grow bg-white/[.03] hover:bg-white/10 p-3 rounded-2xl flex items-center gap-4 transition-all duration-300 border border-white/10 cursor-pointer group">
         <div className="relative flex-shrink-0">
           <div className="absolute inset-0 bg-black/20 rounded-lg -z-10"></div>
           <img
             src={posterUrl}
-            alt={`${movie.title}`}
+            alt={`${suggestion.title}`}
             className="w-16 h-24 object-cover rounded-lg flex-shrink-0 bg-gray-800"
           />
         </div>
 
         <div className="flex-grow overflow-hidden min-w-0">
-          <h3 className="font-semibold text-white line-clamp-1">{movie.title} ({movie.year})</h3>
-          <p className="text-sm text-gray-400 mt-1 line-clamp-1">{movie.overview}</p>
-          {/* <p className="text-xs text-gray-500 mt-2">Year of Release: {movie.year}</p> */}
+          <h3 className="font-semibold text-white line-clamp-1">{suggestion.title} ({suggestion.releaseYear})</h3>
+          {suggestion.justification && suggestion.justification.length > 0 ? (
+            <p className="text-sm text-gray-400 mt-1 line-clamp-1">{suggestion.justification.join(', ')}</p>
+          ) : (
+            <p className="text-sm text-gray-400 mt-1 line-clamp-1">{suggestion.overview}</p>
+          )}
+          <p className="text-xs text-gray-500 mt-2">Year of Release: {suggestion.releaseYear}</p>
         </div>
 
         <div className="flex-shrink-0">
@@ -63,7 +66,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ movie, index, onSelectM
             ${upvoteState === 'idle' ? 'bg-white/10 hover:bg-white/20 text-white/70' : ''}
             ${upvoteState === 'loading' ? 'bg-white/10 text-white/70 cursor-wait' : ''}
             `}
-            aria-label={`Upvote ${movie.title}`}
+            aria-label={`Upvote ${suggestion.title}`}
           >
             {upvoteState === 'idle' && <UpArrowIcon className="w-5 h-5" />}
             {upvoteState === 'loading' && <SpinnerIcon className="w-5 h-5" />}

@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
-import { Movie } from '@/App';
+import { Movie, Suggestion } from '@/App';
 import { LeftArrowInCircleIcon, SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
 import { Header } from '@/components/ui/Header';
@@ -28,74 +27,90 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
 
   type SuggestionState = 'selecting' | 'loading' | 'showing';
 
-  const [suggestionState, setSuggestionState] = useState<SuggestionState>(
-    (movie.keywords && movie.keywords.length > 0) ? 'selecting' : 'loading'
-  );
-  const [suggestions, setSuggestions] = useState<Movie[]>([]);
-  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
+  const [suggestionState, setSuggestionState] = useState<SuggestionState>('selecting');
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setSuggestionState((movie.keywords && movie.keywords.length > 0) ? 'selecting' : 'loading');
-    setSuggestions([]);
-    setError(null);
-    setIsLoadingSuggestions(true);
-    window.scrollTo(0, 0);
-  }, [movie.id]);
-
-  const fetchSuggestions = useCallback(async (isRefresh: boolean = false) => {
-    if (!isRefresh) {
-      console.log('Fetching initial suggestions...');
-    } else {
+  const fetchSuggestions = useCallback(async (options?: { keywords?: string[]; isRefresh?: boolean }) => {
+    if (options?.isRefresh) {
       console.log('Refreshing suggestions...');
+    } else {
+      console.log('Fetching suggestions...');
     }
 
     setIsLoadingSuggestions(true);
+    setSuggestionState('loading'); // Transition to loading view to show spinner
     setError(null);
-    try {
-      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/${movie.id}/similar`);
-      if (!response.ok) {
-        throw new Error('Network response was not ok');
-      }
-      const data = await response.json();
 
-      const formattedSuggestions: Movie[] = data.map((item: any) => ({
+    try {
+      let data;
+      let response;
+      let keywords = options?.keywords || [];
+
+      // POST request for keyword-based recommendations
+      console.log('Finding recommendations based on keywords:', keywords);
+      response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          source_movie_id: movie.id,
+          selected_keywords: keywords,
+        }),
+      });
+      if (!response.ok) { throw new Error('Network response for recommendations was not ok'); }
+      const result = await response.json();
+      data = result.results;
+
+      const formattedSuggestions: Suggestion[] = data.map((item: any) => ({
         id: item.id,
         title: item.title,
-        year: item.release_date ? new Date(item.release_date).getFullYear() : 0,
+        releaseYear: item.release_year,
         posterPath: item.poster_path,
-        backdropPath: item.backdrop_path,
         overview: item.overview || `Overview for "${item.title}" is not available.`,
-        releaseDate: String(item.release_date || 'N/A'),
-        contentType: 'movie',
-        runtime: 'N/A',
-        genres: item.genres?.map((genre: any) => genre.name) || [],
+        justification: item.justification || [],
       }));
 
       setSuggestions(formattedSuggestions);
-      if (suggestionState !== 'showing') setSuggestionState('showing');
-    } catch (err) {
-      console.error("Failed to fetch similar movies:", err);
-      setError("Couldn't load suggestions. Please try again later.");
+      setSuggestionState('showing');
+    } catch (err: any) {
+      console.error("Failed to fetch suggestions:", err);
+      setError(err.message || "Couldn't load suggestions. Please try again later.");
       setSuggestions([]);
+      setSuggestionState('showing'); // Transition to show the error message
     } finally {
       setIsLoadingSuggestions(false);
     }
-  }, [movie.id, suggestionState]);
+  }, [movie.id]);
 
+  // This effect now correctly handles the initial state when the movie changes.
   useEffect(() => {
-    if (suggestionState === 'loading') {
-      fetchSuggestions(false);
+    window.scrollTo(0, 0);
+    setSuggestions([]);
+    setError(null);
+
+    const hasKeywords = movie.keywords && movie.keywords.length > 0;
+    if (hasKeywords) {
+      // If there are keywords, start in the 'selecting' state.
+      setSuggestionState('selecting');
+      setIsLoadingSuggestions(false);
+    } else {
+      // If no keywords, fetch default suggestions immediately.
+      fetchSuggestions();
     }
-  }, [suggestionState, fetchSuggestions]);
+  }, [movie.id, movie.keywords, fetchSuggestions]);
+
 
   const handleFindSimilar = (selectedKeywords: string[]) => {
-    console.log('Finding similar movies based on:', selectedKeywords);
-    setSuggestionState('loading');
+    // This action now directly calls the fetch logic.
+    fetchSuggestions({ keywords: selectedKeywords });
   };
 
   const handleRefreshSuggestions = useCallback(() => {
-    fetchSuggestions(true);
+    // Re-fetch default suggestions
+    fetchSuggestions({ isRefresh: true });
   }, [fetchSuggestions]);
 
 
@@ -113,9 +128,8 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
           {suggestions.map((suggestion, index) => (
             <SuggestionCard
               key={suggestion.id}
-              movie={suggestion}
+              suggestion={suggestion}
               index={index + 1}
-              onSelectMovie={onSelectMovie}
               onUpvote={handleRefreshSuggestions}
             />
           ))}
@@ -214,9 +228,9 @@ const FocusPage: React.FC<FocusPageProps> = ({ movie, onGoHome, onSelectMovie })
               </div>
             </div>
 
-            {/* Suggestions Section (inside the main container, but outside the backdrop area) */}
+            {/* Suggestions Section */}
             <div className="p-6 sm:p-8 bg-[#7D1AED]/10">
-              {suggestionState === 'selecting' && movie.keywords ? (
+              {suggestionState === 'selecting' && movie.keywords && movie.keywords.length > 0 ? (
                 <KeywordSelector keywords={movie.keywords} onFindSimilar={handleFindSimilar} />
               ) : (
                 SuggestionsContent
