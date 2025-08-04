@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 from app.core.database import AsyncSessionLocal
 from app.crud import crud_movie
+from app.utils import llm_parser
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -59,18 +60,36 @@ async def process_results_and_update_db():
                         candidates
                         and "content" in candidates[0]
                         and "parts" in candidates[0]["content"]
+                        and candidates[0]["content"]["parts"]
                     ):
-                        keyword_str = candidates[0]["content"]["parts"][0].get(
-                            "text", ""
+                        parts = candidates[0]["content"]["parts"]
+                        keyword_str = parts[0].get("text", "")
+
+                        keywords_json = llm_parser.parse_llm_keywords(
+                            keyword_str, object_key="keywords"
                         )
+                        if (
+                            not keywords_json or "keywords" not in keywords_json
+                        ) and len(parts) > 1:
+                            logging.warning(
+                                f"No keywords found in first part for movie_id {movie_id}. Trying next part."
+                            )
+                            keyword_str = parts[1].get("text", "")
+                            keywords_json = llm_parser.parse_llm_keywords(
+                                keyword_str, object_key="keywords"
+                            )
+
+                        if not keywords_json or "keywords" not in keywords_json:
+                            logging.warning(
+                                f"No keywords found for movie_id {movie_id} in {result_file_path.name}."
+                            )
+                            continue
 
                         # Convert the keyword string into a list.
-                        keyword_list = [
-                            k.strip() for k in keyword_str.split(",") if k.strip()
-                        ]
+                        keyword_list = keywords_json["keywords"]
 
                         keyword_list = [
-                            k.replace(".", "").title() for k in keyword_list
+                            k.replace(".", "").capitalize() for k in keyword_list
                         ]
 
                         if keyword_list:

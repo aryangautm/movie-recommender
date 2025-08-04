@@ -8,9 +8,8 @@ class RecRequest(BaseModel):
     source_movie_id: int = Field(
         ..., description="The TMDb ID of the movie the user liked."
     )
-    selected_keywords: List[str] = Field(
-        ...,
-        min_length=1,
+    selected_keywords: Optional[List[str]] = Field(
+        [],
         description="A list of AI-generated keywords the user selected.",
     )
 
@@ -18,7 +17,7 @@ class RecRequest(BaseModel):
 class BaseRecResult(BaseModel):
     id: int
     title: str
-    overview: Optional[str]
+    overview: Optional[str] = ""
     release_year: int
     poster_path: str
     justification: Optional[List[str]] = Field(
@@ -26,12 +25,12 @@ class BaseRecResult(BaseModel):
     )
 
 
+class LLMRecResult(BaseRecResult):
+    ai_score: float = Field(..., description="The LLM's assigned similarity score.")
+
+
 class RecResponse(BaseModel):
     status: Literal["complete", "partial"] = Field(
         ..., description="`complete` if from cache, `partial` if a fallback."
     )
     results: List[BaseRecResult]
-
-
-class LLMRecResult(BaseRecResult):
-    ai_score: float = Field(..., description="The LLM's assigned similarity score.")

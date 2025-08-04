@@ -37,6 +37,9 @@ def generate_recommendations(
             ],
         ),
     ]
+    tools = [
+        types.Tool(googleSearch=types.GoogleSearch()),
+    ]
     generate_content_config = types.GenerateContentConfig(
         temperature=0.25,
         thinking_config=types.ThinkingConfig(
@@ -45,6 +48,7 @@ def generate_recommendations(
         system_instruction=[
             types.Part.from_text(text=PROMPT_TXT),
         ],
+        tools=tools,
     )
 
     response = client.models.generate_content(

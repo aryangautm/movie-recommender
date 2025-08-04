@@ -33,37 +33,46 @@ async def get_advanced_recommendations(
             detail=f"Source movie with ID {request.source_movie_id} not found.",
         )
 
-    valid_keywords = source_movie.ai_keywords or []
-    if not set(request.selected_keywords).issubset(valid_keywords):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="One or more selected keywords are not valid for this movie.",
-        )
-
-    keywords_str = "".join(sorted(request.selected_keywords))
-    trigger_hash = hashlib.sha256(
-        f"{request.source_movie_id}:{keywords_str}".encode()
-    ).hexdigest()
-    cache_key = f"llm_rec:{trigger_hash}"
-
-    cached_result = await crud_cache.get_cached_llm_recommendation(
-        redis_client, cache_key
-    )
-    if cached_result:
-        return {
-            "status": "complete",
-            "results": cached_result,
+    if request.selected_keywords:
+        valid_keywords = {
+            kw.replace(".", "").lower() for kw in (source_movie.ai_keywords or [])
         }
+        selected_keywords = {
+            kw.replace(".", "").lower() for kw in request.selected_keywords
+        }
+
+        if not selected_keywords.issubset(valid_keywords):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more selected keywords are not valid for this movie.",
+            )
+
+        keywords_str = "".join(sorted(request.selected_keywords))
+        trigger_hash = hashlib.sha256(
+            f"{request.source_movie_id}:{keywords_str}".encode()
+        ).hexdigest()
+        cache_key = f"llm_rec:{trigger_hash}"
+        print(f"{request.source_movie_id}:{keywords_str}")
+
+        cached_result = await crud_cache.get_cached_llm_recommendation(
+            redis_client, cache_key
+        )
+        if cached_result:
+            return {
+                "status": "complete",
+                "results": cached_result,
+            }
 
     # cache miss
     fallback_results = await crud_movie.get_fallback_recommendations(
-        db, driver, request.source_movie_id, request.selected_keywords
+        db, driver, request.source_movie_id
     )
 
-    celery_app.send_task(
-        "tasks.generate_and_cache_llm_rec",
-        args=[request.source_movie_id, request.selected_keywords, trigger_hash],
-    )
+    if request.selected_keywords:
+        celery_app.send_task(
+            "tasks.generate_and_cache_llm_rec",
+            args=[request.source_movie_id, request.selected_keywords, trigger_hash],
+        )
 
     return {
         "status": "partial",

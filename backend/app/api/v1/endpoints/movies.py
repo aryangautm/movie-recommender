@@ -92,7 +92,7 @@ async def search_movies(
     for movie in db_movies:
         movie_data = movie.__dict__
         movie_data["keywords"] = [
-            keyword.replace(".", "").title() for keyword in movie.ai_keywords or []
+            keyword.replace(".", "").capitalize() for keyword in movie.ai_keywords or []
         ]
         movies.append(movie_data)
     return movies
