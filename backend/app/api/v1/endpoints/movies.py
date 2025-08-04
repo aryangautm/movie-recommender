@@ -13,10 +13,8 @@ from app.crud.crud_movie import (
 from app.crud.crud_cache import get_cached_trending_movies, cache_trending_movies
 from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie, TrendingMoviesPage
 from fastapi import APIRouter, Depends, HTTPException, Query
-from neo4j import Driver
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tmdb_client import tmdb_client
-from app.celery_worker import celery_app
 
 router = APIRouter()
 CACHE_TTL_SECONDS = 86400

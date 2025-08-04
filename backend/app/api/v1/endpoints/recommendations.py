@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from neo4j import Driver
 
 from app import schemas
-from app.celery_worker import celery_app
+from workers.celery_config import celery_app
 from app.core.database import get_async_db
 from app.core.redis import get_redis_client
 from app.core.graph import get_graph_driver
@@ -72,6 +72,7 @@ async def get_advanced_recommendations(
         celery_app.send_task(
             "tasks.generate_and_cache_llm_rec",
             args=[request.source_movie_id, request.selected_keywords, trigger_hash],
+            queue="llm_queue",
         )
 
     return {

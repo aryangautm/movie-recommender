@@ -22,7 +22,7 @@ def read_jsonl(file_path):
             yield json.loads(data)
 
 
-async def process_results_and_update_db():
+def process_results_and_update_db():
     jsonl_files = list(RESULTS_DIR.glob("*.jsonl"))
 
     if not jsonl_files:
@@ -116,8 +116,8 @@ async def process_results_and_update_db():
                     f"Preparing to upsert {len(movies_data_to_upsert)} records for job {result_file_path.name}."
                 )
                 try:
-                    async with AsyncSessionLocal() as db:
-                        await crud_movie.bulk_patch_movies(db, movies_data_to_upsert)
+                    with AsyncSessionLocal() as db:
+                        crud_movie.sync_bulk_patch_movies(db, movies_data_to_upsert)
                     logging.info(
                         f"Successfully upserted keywords for job {result_file_path.name}."
                     )
@@ -139,4 +139,4 @@ async def process_results_and_update_db():
 
 
 if __name__ == "__main__":
-    asyncio.run(process_results_and_update_db())
+    process_results_and_update_db()

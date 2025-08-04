@@ -9,6 +9,7 @@ from app.core.database import Base
 from alembic import context
 from app.models.movie import Movie
 from app.models.recommendation import LlmRecommendation
+from app.models.processing_queue import ProcessingQueue
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

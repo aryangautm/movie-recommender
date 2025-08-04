@@ -1,5 +1,13 @@
 from app.core.database import Base
 from sqlalchemy import JSON, Column, Integer, String, Text, Date, Float
+from sqlalchemy.dialects.postgresql import JSONB, ENUM
+from sqlalchemy import Enum
+import enum
+
+
+class MovieVisibility(str, enum.Enum):
+    PUBLIC = "PUBLIC"
+    PRIVATE = "PRIVATE"
 
 
 class Movie(Base):
@@ -24,3 +32,11 @@ class Movie(Base):
     vote_count = Column(Integer, nullable=True)
     vote_average = Column(Float, default=0.0)
     ai_keywords = Column(JSON, nullable=True)
+    visibility = Column(
+        Enum(MovieVisibility, name="movievisibility", create_type=False),
+        default=MovieVisibility.PUBLIC,
+        index=True,
+        nullable=False,
+        server_default=MovieVisibility.PUBLIC,
+    )
+    additional_keywords = Column(JSONB, nullable=True)

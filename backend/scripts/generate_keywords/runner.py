@@ -1,7 +1,6 @@
 from .batch_processing import create_keyword_generation_batch_jobs
 from .monitor_jobs import monitor_all_batch_jobs
 from .save_keywords import process_results_and_update_db
-import asyncio
 import logging
 import argparse
 
@@ -35,7 +34,7 @@ def main():
     try:
         if not run_specific_step or args.run_batch:
             logging.info("Executing: Create keyword generation batch jobs...")
-            asyncio.run(create_keyword_generation_batch_jobs())
+            create_keyword_generation_batch_jobs()
             logging.info("Completed: Create keyword generation batch jobs.")
 
         if not run_specific_step or args.monitor:
@@ -45,14 +44,13 @@ def main():
 
         if not run_specific_step or args.save:
             logging.info("Executing: Process results and update DB...")
-            asyncio.run(process_results_and_update_db())
+            process_results_and_update_db()
             logging.info("Completed: Process results and update DB.")
 
     except Exception as e:
         logging.error(
             f"An unexpected error occurred during script execution: {e}", exc_info=True
         )
-        # Useful for CI/CD pipelines.
         exit(1)
 
 
