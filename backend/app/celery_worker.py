@@ -168,11 +168,15 @@ def generate_and_cache_llm_rec(
     llm_raw_output = llm_client.generate_recommendations(movie, keywords)
     parsed_recs = llm_parser.parse_llm_recommendations(llm_raw_output)
 
-    print(f"Parsed {len(parsed_recs)} recommendations from LLM output.")
+    print(
+        f"Parsed {len(parsed_recs.get("movies", []))} recommendations from LLM output."
+    )
 
     with SessionLocal() as db:
         enriched_recs = crud_movie.enrich_recommendations_with_db_data(db, parsed_recs)
-
+        print(
+            f"Enriched recommendations with database data: {len(enriched_recs)} found."
+        )
         recs_to_save = [
             {
                 "source_movie_id": source_movie_id,

@@ -25,6 +25,7 @@ RELATIONSHIP_BATCH_SIZE = 10000  # Batch size for Neo4j writes
 # These weights determine the personality of our recommender.
 W_SEMANTIC = 0.65  # Weight for plot, themes, and text content
 W_METADATA = 0.35  # Weight for director, cast, genres, etc.
+from datetime import datetime
 
 
 def get_movies_from_postgres():
@@ -33,19 +34,17 @@ def get_movies_from_postgres():
     db_gen = get_db()
     db = next(db_gen)
     try:
-        # Fetch all fields required for the Movie DNA model
-        return db.query(
-            Movie.id,
-            Movie.title,
-            Movie.overview,
-            Movie.genres,
-            Movie.keywords,
-            Movie.director,
-            Movie.cast,
-            Movie.collection,
-            Movie.vote_count,
-            Movie.vote_average,
-        ).all()
+        return (
+            db.query(
+                Movie.id,
+                Movie.title,
+                Movie.overview,
+                Movie.genres,
+                Movie.ai_keywords,
+            )
+            .filter(Movie.release_date < datetime.now().date())
+            .all()
+        )
     finally:
         db.close()
 
@@ -59,9 +58,8 @@ def preprocess_movies(movies_raw: list):
     model = SentenceTransformer(MODEL_NAME)
 
     movie_profiles = {}
-    metadata_corpus = []  # For fitting the MultiLabelBinarizer
+    metadata_corpus = []
 
-    # First pass: collect all metadata features to build a vocabulary
     print("Step 1/3: Building metadata vocabulary...")
     for movie in movies_raw:
         if not movie.overview:
@@ -71,28 +69,12 @@ def preprocess_movies(movies_raw: list):
             if movie.genres
             else []
         )
-        keywords = (
-            [k["name"] for k in movie.keywords[:5] if k and "name" in k]
-            if movie.keywords
-            else []
-        )
-        director_name = (
-            movie.director["name"]
-            if movie.director and "name" in movie.director
-            else ""
-        )
-        cast_names = (
-            [c["name"] for c in movie.cast[:3] if c and "name" in c]
-            if movie.cast
-            else []
-        )
-        metadata_corpus.append(genres + keywords + [director_name] + cast_names)
+        keywords = movie.ai_keywords or []
+        metadata_corpus.append(genres + keywords)
 
-    # Use MultiLabelBinarizer to create one-hot encoded vectors from metadata
     mlb = MultiLabelBinarizer()
     mlb.fit(metadata_corpus)
 
-    # Second pass: generate the full profile for each movie
     print("Step 2/3: Generating DNA profiles for each movie...")
     for movie, metadata_features in tqdm(
         zip(movies_raw, metadata_corpus),
@@ -102,110 +84,33 @@ def preprocess_movies(movies_raw: list):
         if not movie.overview:
             continue
 
-        # 1. Create the rich semantic document for embedding
-        director_name = (
-            movie.director["name"]
-            if movie.director and "name" in movie.director
-            else ""
-        )
-        keyword_text = " ".join(
-            [k["name"] for k in movie.keywords[:5] if k and "name" in k]
-            if movie.keywords
-            else []
-        )
-        rich_document = f"{movie.title}. Overview: {movie.overview} Keywords: {keyword_text}. Director: {director_name}."
+        keyword_text = " ".join(movie.ai_keywords if movie.ai_keywords else [])
+        rich_document = f"Overview: {movie.overview} Keywords: {keyword_text}"
 
-        # 2. Generate vectors
         vector_semantic = model.encode(rich_document, convert_to_tensor=False)
         vector_metadata = mlb.transform([metadata_features])[0]
-
-        # 3. Calculate Acclaim Score
-        vote_avg = movie.vote_average if movie.vote_average else 0
-        vote_count = movie.vote_count if movie.vote_count else 0
-        score_acclaim = vote_avg * math.log10(vote_count + 1)  # +1 to avoid log10(0)
 
         movie_profiles[movie.id] = {
             "semantic": vector_semantic,
             "metadata": vector_metadata,
-            "acclaim": score_acclaim,
         }
 
-    print("Step 3/3: DNA processing complete.")
+    print("DNA processing complete.")
     return movie_profiles
 
 
 def calculate_hybrid_similarities(profiles: dict, movies_raw: list):
-    """
-    Calculates the final similarity score using the hybrid model, including
-    semantic, metadata, acclaim, and collection-based similarities.
-    """
     print("Calculating hybrid similarity scores...")
     movie_ids = list(profiles.keys())
 
-    # Extract DNA components into matrices for efficient, vectorized calculations
     semantic_vectors = np.array([p["semantic"] for p in profiles.values()])
-    metadata_vectors = np.array(
-        [p["metadata"] for p in profiles.values()], dtype=bool
-    )  # Use boolean type for Jaccard
-    acclaim_scores = np.array([p["acclaim"] for p in profiles.values()])
 
-    # 1. Calculate semantic similarity (cosine)
     print("Calculating semantic similarities (cosine)...")
     semantic_sim_matrix = 1 - pairwise_distances(semantic_vectors, metric="cosine")
 
-    # 2. Calculate metadata similarity (Jaccard for binary vectors)
-    print("Calculating metadata similarities (Jaccard)...")
-    # Note: `ensure_all_finite` is the new name for `force_all_finite` in scikit-learn >= 1.6
-    metadata_sim_matrix = 1 - pairwise_distances(
-        metadata_vectors, metric="jaccard", ensure_all_finite=False
-    )
-
-    # 3. Calculate acclaim penalty
-    print("Calculating acclaim penalty...")
-    min_acclaim, max_acclaim = np.min(acclaim_scores), np.max(acclaim_scores)
-    norm_acclaim = (
-        (acclaim_scores - min_acclaim) / (max_acclaim - min_acclaim)
-        if max_acclaim > min_acclaim
-        else np.zeros_like(acclaim_scores)
-    )
-    acclaim_diff_matrix = np.abs(norm_acclaim[:, np.newaxis] - norm_acclaim)
-    acclaim_penalty_matrix = 1.0 - (
-        0.1 * acclaim_diff_matrix
-    )  # Max 10% penalty for different acclaim levels
-
-    # 4. Combine scores into the final matrix
     print("Combining scores with hybrid model weights and penalties...")
-    combined_sim_matrix = (W_SEMANTIC * semantic_sim_matrix) + (
-        W_METADATA * metadata_sim_matrix
-    )
-    final_sim_matrix = combined_sim_matrix * acclaim_penalty_matrix
+    final_sim_matrix = semantic_sim_matrix
 
-    # 5. Apply collection/franchise boost for explicit connections (Optimized)
-    print("Applying collection/franchise boost (optimized)...")
-    from collections import defaultdict
-
-    movie_id_to_index = {id: i for i, id in enumerate(movie_ids)}
-    collection_to_indices = defaultdict(list)
-
-    for m in movies_raw:
-        if m.collection and "id" in m.collection and m.id in movie_id_to_index:
-            collection_id = m.collection["id"]
-            movie_index = movie_id_to_index[m.id]
-            collection_to_indices[collection_id].append(movie_index)
-
-    boost = 0.5
-    for collection_id, indices in collection_to_indices.items():
-        if len(indices) > 1:
-            for i in range(len(indices)):
-                for j in range(i + 1, len(indices)):
-                    idx1, idx2 = indices[i], indices[j]
-                    # Apply boost and ensure score doesn't exceed 1.0
-                    final_sim_matrix[idx1, idx2] = min(
-                        1.0, final_sim_matrix[idx1, idx2] + boost
-                    )
-                    final_sim_matrix[idx2, idx1] = final_sim_matrix[idx1, idx2]
-
-    # 6. Find top K for each movie and format for Neo4j
     print("Finding top K recommendations and formatting relationships...")
     relationships = []
     for i in tqdm(range(len(movie_ids)), desc="Formatting relationships"):
@@ -232,7 +137,6 @@ def calculate_hybrid_similarities(profiles: dict, movies_raw: list):
 
 
 def create_nodes_and_index(driver: Driver, movie_ids: list):
-    # ... (This function remains unchanged)
     print("Creating index on Movie nodes in Neo4j...")
     with driver.session() as session:
         session.run(
@@ -248,7 +152,6 @@ def create_nodes_and_index(driver: Driver, movie_ids: list):
 
 
 def batch_create_relationships(driver: Driver, relationships: list):
-    # ... (This function remains unchanged)
     print(
         f"\nCreating {len(relationships)} similarity relationships in batches of {RELATIONSHIP_BATCH_SIZE}..."
     )
@@ -289,11 +192,9 @@ def main():
         print("No movies found in PostgreSQL. Please run 'ingest_metadata.py' first.")
         return
 
-    # Step 1: Perform all CPU/GPU intensive AI processing first.
     movie_profiles = preprocess_movies(movies_raw)
     all_relationships = calculate_hybrid_similarities(movie_profiles, movies_raw)
 
-    # Step 2: Connect to the database and perform all write operations.
     driver = None
     try:
         print("\nConnecting to Neo4j to write data...")

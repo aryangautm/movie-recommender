@@ -11,6 +11,7 @@ from app.schemas.movie import MovieSearchResult
 from app.schemas.recommendation import LLMRecResult
 from sqlalchemy.orm import Session
 from datetime import datetime
+import time
 
 
 def chunker(seq, size):
@@ -199,7 +200,7 @@ async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> S
     async with db_session_factory() as db:
         result = await db.execute(
             select(Movie.id).filter(
-                Movie.title.is_(None),
+                Movie.ai_keywords.is_(None),
             )
         )
         return {row[0] for row in result.all()}
@@ -229,11 +230,7 @@ def enrich_recommendations_with_db_data(
         year = rec.get("release_year")
 
         if title and isinstance(title, str) and year and isinstance(year, int):
-            tsquery_str = " & ".join([part + ":*" for part in title.strip().split()])
-            match_condition = func.to_tsvector("english", Movie.title).op("@@")(
-                func.to_tsquery("english", tsquery_str)
-            )
-            condition = and_(match_condition, Movie.release_year == year)
+            condition = and_(Movie.title.ilike(title), Movie.release_year == year)
             search_conditions.append(condition)
 
     if not search_conditions:
@@ -261,12 +258,19 @@ def enrich_recommendations_with_db_data(
             final_object = LLMRecResult(
                 id=matched_movie.id,
                 title=matched_movie.title,
+                overview=matched_movie.overview,
                 release_year=matched_movie.release_year,
                 poster_path=matched_movie.poster_path,
                 justification=rec.get("justification_keywords", []),
                 ai_score=rec.get("similarity_score", 0.0),
             )
             final_results.append(final_object.model_dump())
+        else:
+            with open("request_movie.txt", "a") as file:
+                file.write(
+                    f"Could not find movie in DB: {title} ({year}). "
+                    f"Original data: {rec}\n"
+                )
 
     return final_results
 
@@ -281,21 +285,35 @@ async def get_fallback_recommendations(
     ORDER BY r.effective_score DESC
     LIMIT 20
     """
-    with driver.session() as session:
-        result = session.run(query, id=source_movie_id)
-        ranked_recs_from_graph = [
-            {"id": record["tmdb_id"], "effective_score": record["effective_score"]}
-            for record in result
-        ]
+    ranked_recs_from_graph = []
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            with driver.session() as session:
+                result = session.run(query, id=source_movie_id)
+                ranked_recs_from_graph = [
+                    {
+                        "id": record["tmdb_id"],
+                        "effective_score": record["effective_score"],
+                    }
+                    for record in result
+                ]
+            break
+        except Exception as e:
+            print(f"Neo4j query failed on attempt {attempt + 1}/{max_retries}: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2**attempt)
+            else:
+                print("Max retries reached. Giving up.")
 
     if not ranked_recs_from_graph:
         return []
 
     similar_ids = [rec["id"] for rec in ranked_recs_from_graph]
 
-    query = select(Movie.id, Movie.title, Movie.release_year, Movie.poster_path).where(
-        Movie.id.in_(similar_ids)
-    )
+    query = select(
+        Movie.id, Movie.title, Movie.release_year, Movie.poster_path, Movie.overview
+    ).where(Movie.id.in_(similar_ids))
     result = await db.execute(query)
 
     movies_data_map = {row.id: row for row in result.all()}
@@ -303,7 +321,7 @@ async def get_fallback_recommendations(
     final_results = []
     for rec in ranked_recs_from_graph:
         movie_data = movies_data_map.get(rec["id"])
-        if movie_data:
+        if movie_data and movie_data.id and movie_data.title and movie_data.poster_path:
             final_results.append(
                 {
                     "id": movie_data.id,
@@ -313,5 +331,4 @@ async def get_fallback_recommendations(
                     "poster_path": movie_data.poster_path,
                 }
             )
-
     return final_results

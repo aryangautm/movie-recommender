@@ -75,10 +75,12 @@ def prepare_manifest_file(manifest_path: str):
     Prepares the manifest file to log job details, writing a header if needed.
     """
     try:
-        with open(manifest_path, "w") as f:
-            f.write(
-                "job_name,input_file_name,start_movie_id,end_movie_id,request_count,job_status\n"
-            )
+        # Open in append mode, which creates the file if it doesn't exist.
+        with open(manifest_path, "a") as f:
+            if f.tell() == 0:
+                f.write(
+                    "job_name,input_file_name,start_movie_id,end_movie_id,request_count,job_status\n"
+                )
     except IOError as e:
         logging.error(f"Could not open or write to manifest file {manifest_path}: {e}")
         raise
