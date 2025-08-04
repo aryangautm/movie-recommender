@@ -13,6 +13,12 @@ from app.crud import crud_movie, crud_cache
 
 router = APIRouter()
 
+from sentence_transformers import SentenceTransformer
+
+print("Loading SentenceTransformer model...")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+print("Model loaded successfully.")
+
 
 @router.post(
     "/",
@@ -64,9 +70,18 @@ async def get_advanced_recommendations(
             }
 
     # cache miss
-    fallback_results = await crud_movie.get_fallback_recommendations(
-        db, driver, request.source_movie_id
-    )
+    # fallback_results = await crud_movie.get_fallback_recommendations(
+    #     db, driver, request.source_movie_id
+    # )
+    if request.selected_keywords:
+        query = " ".join(
+            f"{kw.replace('.', '').lower()}" for kw in request.selected_keywords
+        )
+    else:
+        query = source_movie.overview or source_movie.title
+
+    embedding = model.encode(query, convert_to_tensor=True).tolist()
+    fallback_results = await crud_movie.vector_search(db, source_movie.id, embedding)
 
     if request.selected_keywords:
         celery_app.send_task(

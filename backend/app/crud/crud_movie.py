@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ..models.movie import Movie
+from ..models.movie import Movie, MovieVisibility
 from app.models.processing_queue import ProcessingQueue, TriggerSource
 from app.schemas.movie import MovieSearchResult
 from app.schemas.recommendation import LLMRecResult
@@ -405,6 +405,42 @@ async def get_fallback_recommendations(
                     "overview": movie_data.overview,
                     "release_year": movie_data.release_year,
                     "poster_path": movie_data.poster_path,
+                }
+            )
+    return final_results
+
+
+async def vector_search(db: AsyncSession, id: str, query_embedding: str) -> List:
+    """
+    Performs a vector search in the movies table using the pgvector extension.
+    Returns a list of Movie objects sorted by similarity to the query embedding.
+    """
+    stmt = (
+        select(
+            Movie.id, Movie.title, Movie.release_year, Movie.poster_path, Movie.overview
+        )
+        .filter(Movie.visibility == MovieVisibility.PUBLIC, Movie.id != id)
+        .order_by(
+            (
+                Movie.embedding.cosine_distance(query_embedding)
+                + ((2025 - Movie.release_year) * 0.005)
+            )
+        )
+        .limit(40)
+    )
+    result = await db.execute(stmt)
+    movies = result.all()
+
+    final_results = []
+    for movie in movies:
+        if movie.id and movie.title and movie.poster_path and movie.release_year:
+            final_results.append(
+                {
+                    "id": movie.id,
+                    "title": movie.title,
+                    "overview": movie.overview,
+                    "release_year": movie.release_year,
+                    "poster_path": movie.poster_path,
                 }
             )
     return final_results
