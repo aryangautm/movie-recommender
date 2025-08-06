@@ -134,6 +134,11 @@ def process_and_format_movies(
         processed_movies.append(
             {
                 "id": data["id"],
+                "original_language": data.get("original_language"),
+                "origin_country": data.get("origin_country", []),
+                "original_title": data.get("original_title"),
+                "runtime": data.get("runtime"),
+                "tagline": data.get("tagline"),
                 "title": data.get("title"),
                 "overview": data.get("overview"),
                 "release_date": release_data,
@@ -156,19 +161,17 @@ async def main():
     """Main orchestration function for the entire ingestion process."""
 
     # --- Stage 1: Discover Movie IDs ---
-    # async with httpx.AsyncClient(timeout=20.0) as client:
-    #     existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
-    #     print(f"Found {len(existing_db_ids)} movies already in the database.")
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        existing_db_ids = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+        print(f"Found {len(existing_db_ids)} movies already in the database.")
 
-    #     discovered_ids = await discover_movie_ids(client)
-    #     new_ids_to_fetch = discovered_ids - existing_db_ids
-    #     print(f"Discovered {len(new_ids_to_fetch)} new movie IDs to fetch.")
+        discovered_ids = await discover_movie_ids(client)
+        new_ids_to_fetch = discovered_ids - existing_db_ids
+        print(f"Discovered {len(new_ids_to_fetch)} new movie IDs to fetch.")
 
-    #     if not new_ids_to_fetch:
-    #         print("No new movies to ingest. Exiting.")
-    #         return
-
-    new_ids_to_fetch = await crud_movie.get_all_movie_ids(AsyncSessionLocal)
+        if not new_ids_to_fetch:
+            print("No new movies to ingest. Exiting.")
+            return
 
     # --- Stage 2: Fetch Full Details for New Movies ---
     async with httpx.AsyncClient(timeout=20.0) as client:

@@ -80,7 +80,7 @@ class TMDbClient:
         """
         Fetches a page of trending movies from the TMDb API using an async client.
         """
-        async with httpx.Client() as client:
+        async with httpx.AsyncClient() as client:
             try:
                 params = {**self.params, "language": "en-US", "page": page}
                 response = await client.get(

@@ -1,8 +1,7 @@
-import asyncio
 import json
 import logging
 from pathlib import Path
-from app.core.database import AsyncSessionLocal
+from app.core.database import SessionLocal
 from app.crud import crud_movie
 from app.utils import llm_parser
 
@@ -116,7 +115,7 @@ def process_results_and_update_db():
                     f"Preparing to upsert {len(movies_data_to_upsert)} records for job {result_file_path.name}."
                 )
                 try:
-                    with AsyncSessionLocal() as db:
+                    with SessionLocal() as db:
                         crud_movie.sync_bulk_patch_movies(db, movies_data_to_upsert)
                     logging.info(
                         f"Successfully upserted keywords for job {result_file_path.name}."
