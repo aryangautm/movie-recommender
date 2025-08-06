@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 from app.core.database import SessionLocal
 from app.crud import crud_movie
-from app.utils import llm_parser
+from app.utils import llm_parser, validator
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -86,6 +86,12 @@ def process_results_and_update_db():
 
                         # Convert the keyword string into a list.
                         keyword_list = keywords_json["keywords"]
+
+                        if not validator.is_valid_keyword_list(keyword_list):
+                            logging.warning(
+                                f"Invalid keywords found for movie_id {movie_id} in {result_file_path.name}."
+                            )
+                            continue
 
                         keyword_list = [
                             k.replace(".", "").capitalize() for k in keyword_list
