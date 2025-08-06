@@ -1,5 +1,5 @@
 import redis.asyncio as redis
-from app.celery_worker import celery_app
+from workers.celery_config import celery_app
 from app.core.redis import get_redis_client
 from app.crud import crud_vote
 import app.schemas as schemas
@@ -31,7 +31,9 @@ async def create_or_vote_on_link(
         )
 
     celery_app.send_task(
-        "tasks.process_similarity_vote", args=[vote.movie_id_1, vote.movie_id_2]
+        "tasks.process_similarity_vote",
+        args=[vote.movie_id_1, vote.movie_id_2],
+        queue="llm_queue",
     )
 
     await crud_vote.record_user_vote(

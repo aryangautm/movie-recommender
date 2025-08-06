@@ -3,10 +3,10 @@ from celery import Celery
 from celery.signals import worker_shutdown
 from neo4j import Driver, GraphDatabase
 from typing import List, Dict, Any
-from .core.database import SessionLocal
+from app.core.database import SessionLocal
 from datetime import datetime
-from .core.config import settings
-from .crud import crud_vote, crud_movie, crud_cache, crud_recommendation
+from app.core.config import settings
+from app.crud import crud_vote, crud_movie, crud_cache, crud_recommendation
 from app.core.tmdb_client import tmdb_client
 from app.services import llm_client
 from app.core.redis import sync_get_redis_client
@@ -15,9 +15,7 @@ from app.utils import llm_parser
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-celery_app = Celery("worker", broker=settings.REDIS_URL, backend=settings.REDIS_URL)
-
-celery_app.conf.imports = ("app.celery_worker",)
+from .celery_config import celery_app
 
 
 neo4j_driver: Driver = None
@@ -94,60 +92,6 @@ def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
             f"Task failed for vote between ({movie_id_1}, {movie_id_2}). Error: {e}"
         )
         raise self.retry(exc=e)
-
-
-# @celery_app.task(
-#     name="tasks.ingest_new_movies",
-#     autoretry_for=(Exception,),
-#     retry_kwargs={"max_retries": 2, "countdown": 60},
-# )
-# def ingest_new_movies(movies_data: List[Dict[str, Any]]):
-#     """
-#     Celery task to ingest a list of new movies into the PostgreSQL database.
-#     Called from trending endpoint.
-#     """
-#     if not movies_data:
-#         logger.info("ingest_new_movies task received with no data. Exiting.")
-#         return
-
-#     logger.info(f"Received task to ingest {len(movies_data)} new movies.")
-
-#     genre_map = tmdb_client.get_genre_map()
-#     if not genre_map:
-#         logger.error("Could not fetch genre map. Aborting ingestion task.")
-#         raise Exception("Failed to get genre map for movie ingestion.")
-
-#     movies_to_create = []
-#     for movie_data in movies_data:
-#         genres = [
-#             {"id": gid, "name": genre_map.get(gid, "Unknown")}
-#             for gid in movie_data.get("genre_ids", [])
-#         ]
-#         release_date_str = movie_data.get("release_date", "")
-#         release_year_int = (
-#             int(release_date_str.split("-")[0]) if release_date_str else None
-#         )
-#         movies_to_create.append(
-#             {
-#                 "id": movie_data.get("id"),
-#                 "title": movie_data.get("title"),
-#                 "overview": movie_data.get("overview"),
-#                 "release_date": datetime.fromisoformat(release_date_str).date(),
-#                 "release_year": release_year_int,
-#                 "poster_path": movie_data.get("poster_path"),
-#                 "backdrop_path": movie_data.get("backdrop_path"),
-#                 "genres": genres,
-#             }
-#         )
-
-#     logger.info(f"Connecting to DB to ingest {len(movies_to_create)} movies.")
-#     with SessionLocal() as db:
-#         try:
-#             crud_movie.bulk_create_movies(db, movies_to_create)
-#             logger.info("Database ingestion successful.")
-#         except Exception as e:
-#             logger.error(f"Database ingestion failed: {e}")
-#             raise
 
 
 @celery_app.task(

@@ -17,6 +17,8 @@ You will be provided with the following information:
 4.  **Field-Specific Logic:**
     *   `similarity_score`: This score (0.0-10.0) must reflect how strongly the recommended movie matches the user's `liked_keywords`. A higher score indicates a better match.
     *   `justification_keywords`: This array must contain 2-5 concise keywords or phrases that explicitly justify the recommendation by connecting it to the user's `liked_keywords`.
+5.  **Only Movies:** The recommendations should only be movies and not TV shows or any external video. Re-verify everycontent.
+6   **Official Titles:** Always check if the title is official or not. Avoid typos.
 
 ### JSON Schema
 ```json

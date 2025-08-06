@@ -15,3 +15,4 @@ asyncpg
 httpx
 scikit-learn
 eventlet==0.40.2
+pgvector==0.4.1

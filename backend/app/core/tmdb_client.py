@@ -8,6 +8,10 @@ TMDB_API_URL = "https://api.themoviedb.org/3"
 REQUEST_TIMEOUT = 10  # seconds
 
 
+chars_to_remove = "·'.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
+translation_table = str.maketrans("", "", chars_to_remove)
+
+
 class TMDbClient:
     """
     A client for interacting with The Movie Database (TMDb) API.
@@ -76,7 +80,7 @@ class TMDbClient:
         """
         Fetches a page of trending movies from the TMDb API using an async client.
         """
-        async with httpx.AsyncClient() as client:
+        async with httpx.Client() as client:
             try:
                 params = {**self.params, "language": "en-US", "page": page}
                 response = await client.get(
@@ -92,6 +96,39 @@ class TMDbClient:
                     f"TMDb API returned an error: {e.response.status_code} - {e.response.text}"
                 )
                 return None
+
+    def search_movie(
+        self, query: str, release_year: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Searches for movies by title and fetches results from TMDb.
+        """
+        try:
+            movie_data = None
+            response_data = {}
+            query = query.translate(translation_table).strip().lower()
+            with httpx.Client() as client:
+                params = {
+                    **self.params,
+                    "query": query,
+                    "include_adult": False,
+                    "year": release_year,
+                }
+                response = client.get(f"{self.base_url}/search/movie", params=params)
+                response.raise_for_status()
+                response_data = response.json()
+            if response_data.get("results"):
+                for result in response_data["results"]:
+                    result_title = (
+                        result["title"].translate(translation_table).strip().lower()
+                    )
+                    if result_title == query:
+                        movie_data = result
+                        break
+            return movie_data
+        except httpx.RequestError as e:
+            print(f"An error occurred while searching for movies: {e}")
+            return None
 
 
 # Create a single instance to be used across the application

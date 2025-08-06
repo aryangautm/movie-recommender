@@ -7,11 +7,11 @@ from google import genai
 from google.genai import types
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from datetime import datetime
-from app.core.database import AsyncSessionLocal
+from app.core.database import SessionLocal
 from app.models.movie import Movie
+from sqlalchemy.orm import Session
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -48,7 +48,7 @@ def read_system_prompt(prompt_path: Path) -> str | None:
         return None
 
 
-async def fetch_all_movies(session: AsyncSession) -> list:
+def fetch_all_movies(session: Session) -> list:
     """Fetches all movie entries from the database that do not have AI keywords yet."""
     logging.info("Connecting to the database to fetch movies without AI keywords.")
     try:
@@ -59,7 +59,7 @@ async def fetch_all_movies(session: AsyncSession) -> list:
             )
             .order_by(Movie.vote_count.desc().nulls_last())
         )
-        result = await session.execute(query)
+        result = session.execute(query)
         all_movies = result.all()
         logging.info(
             f"Fetched {len(all_movies)} movies without AI keywords from the database."
@@ -168,7 +168,7 @@ def log_job_to_manifest(
         logging.error(f"Failed to write job details to manifest file: {e}")
 
 
-async def create_keyword_generation_batch_jobs():
+def create_keyword_generation_batch_jobs():
     """
     Reads movie data, breaks it into chunks, and creates a separate Gemini
     Batch API job for each chunk, tracking the jobs in a manifest file.
@@ -183,8 +183,8 @@ async def create_keyword_generation_batch_jobs():
     if not system_prompt:
         return
 
-    async with AsyncSessionLocal() as session:
-        all_movies = await fetch_all_movies(session)
+    with SessionLocal() as session:
+        all_movies = fetch_all_movies(session)
 
     if not all_movies:
         logging.warning(

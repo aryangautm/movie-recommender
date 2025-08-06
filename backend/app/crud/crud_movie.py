@@ -1,17 +1,22 @@
 from typing import Any, Dict, List, Set, Callable
 from sqlalchemy import select, or_, and_
+import uuid
 from neo4j import Driver
 from sqlalchemy import insert, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
-from ..models.movie import Movie
+from ..models.movie import Movie, MovieVisibility
+from app.models.processing_queue import ProcessingQueue, TriggerSource
 from app.schemas.movie import MovieSearchResult
 from app.schemas.recommendation import LLMRecResult
 from sqlalchemy.orm import Session
 from datetime import datetime
 import time
+from app.crud import crud_processing_queue
+import random
+from workers.celery_config import celery_app
 
 
 def chunker(seq, size):
@@ -32,13 +37,16 @@ def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
     for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
         print(f"Creating movies: Batch {i+1} with {len(movie_batch)} movies")
         try:
-            db.execute(insert(Movie), movie_batch)
+            stmt = insert(Movie.__table__).values(movie_batch)
+            stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
+            db.execute(stmt)
             db.commit()
         except Exception as e:
             with open("error_log.txt", "a") as error_file:
                 error_file.write(f"Error during bulk create: {e}\n")
             db.rollback()
             print(f"Error during batch {i+1}: {e}")
+            raise
 
 
 async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
@@ -122,6 +130,50 @@ async def bulk_patch_movies(db: AsyncSession, movies_data: List[Dict[str, Any]])
             print(f"Error during bulk patch on batch {i+1}: {e}")
 
             await db.rollback()
+            with open("patch_error_log.txt", "a") as error_file:
+                error_file.write(f"Error: {e}\nBatch Data: {movie_batch}\n\n")
+
+    print("Bulk patch process completed.")
+
+
+def sync_bulk_patch_movies(db: Session, movies_data: List[Dict[str, Any]]):
+    if not movies_data:
+        return
+
+    BATCH_SIZE = 1000
+
+    print(f"Starting bulk patch for {len(movies_data)} records...")
+    for i, movie_batch in enumerate(chunker(movies_data, BATCH_SIZE)):
+        if not movie_batch:
+            continue
+
+        print(f"Processing batch {i+1} with {len(movie_batch)} movies...")
+        try:
+            stmt = insert(Movie.__table__).values(movie_batch)
+
+            update_dict = {
+                c.name: c
+                for c in stmt.excluded
+                if c.name in movie_batch[0] and c.name != "id"
+            }
+
+            if not update_dict:
+                print(f"Batch {i+1} had no fields to update other than 'id'. Skipping.")
+                continue
+
+            # On conflict (i.e., the movie 'id' exists), update only the specified fields.
+            patch_stmt = stmt.on_conflict_do_update(
+                index_elements=["id"], set_=update_dict
+            )
+
+            db.execute(patch_stmt)
+            db.commit()
+            print(f"Successfully patched batch {i+1}.")
+
+        except Exception as e:
+            print(f"Error during bulk patch on batch {i+1}: {e}")
+
+            db.rollback()
             with open("patch_error_log.txt", "a") as error_file:
                 error_file.write(f"Error: {e}\nBatch Data: {movie_batch}\n\n")
 
@@ -245,6 +297,7 @@ def enrich_recommendations_with_db_data(
     }
 
     final_results = []
+    movies_to_process = []
     for rec in parsed_recs.get("movies", []):
         title = rec.get("movie_title")
         year = rec.get("release_year")
@@ -266,12 +319,29 @@ def enrich_recommendations_with_db_data(
             )
             final_results.append(final_object.model_dump())
         else:
-            with open("request_movie.txt", "a") as file:
-                file.write(
-                    f"Could not find movie in DB: {title} ({year}). "
-                    f"Original data: {rec}\n"
-                )
+            properties = {
+                k: v for k, v in rec.items() if k not in ["movie_title", "release_year"]
+            }
+            # This ID is temporary for a movie not yet in our DB.
+            # A random 8-digit number is used as a placeholder.
+            # Note: This assumes the processing queue doesn't rely on this being a real, unique TMDB ID.
 
+            movies_to_process.append(
+                {
+                    "title": title,
+                    "release_year": year,
+                    "properties": properties,
+                    "trigger_source": TriggerSource.RECOMMENDATION,
+                }
+            )
+
+    print("done with enrichment")
+    if movies_to_process:
+        crud_processing_queue.bulk_create_process(db, movies_to_process)
+        celery_app.send_task(
+            "tasks.ingest_recommended_movies",
+            queue="ingestion_queue",
+        )
     return final_results
 
 
@@ -321,7 +391,13 @@ async def get_fallback_recommendations(
     final_results = []
     for rec in ranked_recs_from_graph:
         movie_data = movies_data_map.get(rec["id"])
-        if movie_data and movie_data.id and movie_data.title and movie_data.poster_path:
+        if (
+            movie_data
+            and movie_data.id
+            and movie_data.title
+            and movie_data.poster_path
+            and movie_data.release_year
+        ):
             final_results.append(
                 {
                     "id": movie_data.id,
@@ -329,6 +405,42 @@ async def get_fallback_recommendations(
                     "overview": movie_data.overview,
                     "release_year": movie_data.release_year,
                     "poster_path": movie_data.poster_path,
+                }
+            )
+    return final_results
+
+
+async def vector_search(db: AsyncSession, id: str, query_embedding: str) -> List:
+    """
+    Performs a vector search in the movies table using the pgvector extension.
+    Returns a list of Movie objects sorted by similarity to the query embedding.
+    """
+    stmt = (
+        select(
+            Movie.id, Movie.title, Movie.release_year, Movie.poster_path, Movie.overview
+        )
+        .filter(Movie.visibility == MovieVisibility.PUBLIC, Movie.id != id)
+        .order_by(
+            (
+                Movie.embedding.cosine_distance(query_embedding)
+                + ((2025 - Movie.release_year) * 0.005)
+            )
+        )
+        .limit(40)
+    )
+    result = await db.execute(stmt)
+    movies = result.all()
+
+    final_results = []
+    for movie in movies:
+        if movie.id and movie.title and movie.poster_path and movie.release_year:
+            final_results.append(
+                {
+                    "id": movie.id,
+                    "title": movie.title,
+                    "overview": movie.overview,
+                    "release_year": movie.release_year,
+                    "poster_path": movie.poster_path,
                 }
             )
     return final_results
