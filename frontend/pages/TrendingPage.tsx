@@ -1,13 +1,10 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ContentTypeToggle, { ContentType } from '../components/ContentTypeToggle';
 import { TrendingIcon, SpinnerIcon } from '../components/icons';
 import TrendingCard from '../components/TrendingCard';
 import { Movie } from '../App';
-
-interface TrendingPageProps {
-    onSelectMovie: (movie: Movie) => void;
-}
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
 
@@ -24,7 +21,8 @@ const formatMovieData = (item: any): Movie => ({
     genres: item.genres?.map((genre: any) => genre.name) || [],
 });
 
-const TrendingPage: React.FC<TrendingPageProps> = ({ onSelectMovie }) => {
+const TrendingPage: React.FC = () => {
+    const navigate = useNavigate();
     const [activeType, setActiveType] = useState<ContentType>('movie');
     const [movies, setMovies] = useState<Movie[]>([]);
     const [page, setPage] = useState(1);
@@ -81,6 +79,10 @@ const TrendingPage: React.FC<TrendingPageProps> = ({ onSelectMovie }) => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, [isLoading, hasMore, page, activeType, fetchTrending]);
 
+    const handleSelectMovie = (movie: Movie) => {
+        navigate(`/movie/${movie.id}`);
+    };
+
     const renderContent = () => {
         if (activeType === 'tvShow') {
             return (
@@ -114,7 +116,7 @@ const TrendingPage: React.FC<TrendingPageProps> = ({ onSelectMovie }) => {
             <>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 md:gap-6">
                     {movies.map(item => (
-                        <TrendingCard key={item.id} item={item} onSelectMovie={onSelectMovie} />
+                        <TrendingCard key={item.id} item={item} onSelectMovie={handleSelectMovie} />
                     ))}
                 </div>
                 {isLoading && (
