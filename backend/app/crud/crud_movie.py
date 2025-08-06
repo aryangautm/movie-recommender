@@ -1,6 +1,7 @@
 from typing import Any, Dict, List, Set, Callable
-from sqlalchemy import select, or_, and_
+from sqlalchemy import select, or_, and_, text, case
 import uuid
+import json
 from neo4j import Driver
 from sqlalchemy import insert, func
 from sqlalchemy.dialects.postgresql import insert
@@ -206,8 +207,9 @@ async def search_movies_by_title(
     """
     Searches for movies by title and returns data structured for the
     MovieSearchResult schema.
-    Full-text search is used here;
+    Full-text search is used here, with exact matches boosted to the top.
     """
+
     query_parts = query.strip().split()
     tsquery_str = " & ".join([part + ":*" for part in query_parts])
 
@@ -220,15 +222,29 @@ async def search_movies_by_title(
         func.to_tsquery("english", tsquery_str),
     ).label("rank")
 
+    # Boost exact (case-insensitive) matches to the top
+    exact_match_boost = case((Movie.title.ilike(query), 0), else_=1).label(
+        "exact_match_priority"
+    )
+
     stmt = (
         select(Movie, rank)
-        .filter(match_condition, Movie.release_date < datetime.now().date())
-        .order_by(rank.desc(), Movie.vote_count.desc().nulls_last())
+        .filter(
+            match_condition,
+            Movie.release_date < datetime.now().date(),
+            Movie.visibility == MovieVisibility.PUBLIC,
+        )
+        .order_by(
+            exact_match_boost,
+            rank.desc(),
+            Movie.vote_count.desc().nulls_last(),
+        )
         .limit(limit)
     )
     result = await db.execute(stmt)
 
-    return result.scalars().all()
+    # The result contains tuples of (Movie, rank), we only want the Movie objects.
+    return [row.Movie for row in result.all()]
 
 
 async def filter_existing_movie_ids(db: AsyncSession, movie_ids: List[int]) -> Set[int]:
@@ -252,10 +268,14 @@ async def get_all_movie_ids(db_session_factory: Callable[[], AsyncSession]) -> S
     async with db_session_factory() as db:
         result = await db.execute(
             select(Movie.id).filter(
-                Movie.ai_keywords.is_(None),
+                Movie.origin_country.is_(None),
             )
         )
         return {row[0] for row in result.all()}
+
+
+chars_to_remove = "·'.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
+translation_table = str.maketrans("", "", chars_to_remove)
 
 
 def enrich_recommendations_with_db_data(
@@ -298,6 +318,7 @@ def enrich_recommendations_with_db_data(
 
     final_results = []
     movies_to_process = []
+    additional_keywords = {}
     for rec in parsed_recs.get("movies", []):
         title = rec.get("movie_title")
         year = rec.get("release_year")
@@ -308,13 +329,18 @@ def enrich_recommendations_with_db_data(
         matched_movie = db_movie_map.get((title.lower(), year))
 
         if matched_movie:
+            justification_keywords = rec.get("justification_keywords", [])
+            additional_keywords[matched_movie.id] = [
+                kw.translate(translation_table).strip().capitalize()
+                for kw in justification_keywords
+            ]
             final_object = LLMRecResult(
                 id=matched_movie.id,
                 title=matched_movie.title,
                 overview=matched_movie.overview,
                 release_year=matched_movie.release_year,
                 poster_path=matched_movie.poster_path,
-                justification=rec.get("justification_keywords", []),
+                justification=justification_keywords,
                 ai_score=rec.get("similarity_score", 0.0),
             )
             final_results.append(final_object.model_dump())
@@ -322,10 +348,6 @@ def enrich_recommendations_with_db_data(
             properties = {
                 k: v for k, v in rec.items() if k not in ["movie_title", "release_year"]
             }
-            # This ID is temporary for a movie not yet in our DB.
-            # A random 8-digit number is used as a placeholder.
-            # Note: This assumes the processing queue doesn't rely on this being a real, unique TMDB ID.
-
             movies_to_process.append(
                 {
                     "title": title,
@@ -342,6 +364,15 @@ def enrich_recommendations_with_db_data(
             "tasks.ingest_recommended_movies",
             queue="ingestion_queue",
         )
+    if additional_keywords:
+        try:
+            data = [
+                {"id": movie_id, "additional_keywords": keywords}
+                for movie_id, keywords in additional_keywords.items()
+            ]
+            update_additional_keywords(db, data)
+        except Exception as e:
+            print(f"Error during bulk patch of additional keywords: {e}")
     return final_results
 
 
@@ -411,21 +442,12 @@ async def get_fallback_recommendations(
 
 
 async def vector_search(db: AsyncSession, id: str, query_embedding: str) -> List:
-    """
-    Performs a vector search in the movies table using the pgvector extension.
-    Returns a list of Movie objects sorted by similarity to the query embedding.
-    """
     stmt = (
         select(
             Movie.id, Movie.title, Movie.release_year, Movie.poster_path, Movie.overview
         )
         .filter(Movie.visibility == MovieVisibility.PUBLIC, Movie.id != id)
-        .order_by(
-            (
-                Movie.embedding.cosine_distance(query_embedding)
-                + ((2025 - Movie.release_year) * 0.005)
-            )
-        )
+        .order_by((Movie.embedding.cosine_distance(query_embedding)))
         .limit(40)
     )
     result = await db.execute(stmt)
@@ -444,3 +466,63 @@ async def vector_search(db: AsyncSession, id: str, query_embedding: str) -> List
                 }
             )
     return final_results
+
+
+def create_query_description(title, overview, genres, ai_keywords, selected_keywords):
+    description_parts = []
+
+    filtered_overview = (
+        filter_overview_by_keywords(overview, selected_keywords)
+        or "a story involving intriguing elements"
+    )
+    emphasized_selected = ", ".join(selected_keywords * 2)
+
+    description_parts.append(
+        f"Recommend movies emphasizing these specific themes and narratives: {emphasized_selected}."
+    )
+    # description_parts.append(f"Similar to plots involving: {filtered_overview}.")
+    description_parts.append(f"In genres like {', '.join(genres[:2]).lower()}.")
+
+    if ai_keywords:
+        description_parts.append(
+            f"With additional elements such as {', '.join(ai_keywords[:3])}."
+        )
+
+    return " ".join(description_parts)
+
+
+def update_additional_keywords(db: Session, data: List[Dict[str, Any]]) -> None:
+
+    if data:
+        values = ", ".join(
+            f"({item['id']}, '{json.dumps(item['additional_keywords'])}'::jsonb)"
+            for item in data
+        )
+
+        # Construct the update query
+        update_query = text(
+            f"""
+            UPDATE movies AS t
+            SET additional_keywords = COALESCE(t.additional_keywords, '[]'::jsonb) || v.new_keywords
+            FROM (VALUES {values}) AS v(id, new_keywords)
+            WHERE t.id = v.id
+        """
+        )
+
+        db.execute(update_query)
+        db.commit()
+
+    db.close()
+
+
+import re
+
+
+def filter_overview_by_keywords(overview, selected_keywords):
+    if not overview:
+        return ""
+    sentences = re.split(r"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s", overview.strip())
+    filtered_sentences = [
+        s for s in sentences if any(kw.lower() in s.lower() for kw in selected_keywords)
+    ]
+    return " ".join(filtered_sentences[:2])

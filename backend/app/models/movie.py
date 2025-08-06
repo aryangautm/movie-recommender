@@ -1,5 +1,5 @@
 from app.core.database import Base
-from sqlalchemy import JSON, Column, Integer, String, Text, Date, Float
+from sqlalchemy import JSON, Column, Integer, String, Text, Date, Float, Boolean
 from sqlalchemy.dialects.postgresql import JSONB, ENUM
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import Enum
@@ -41,4 +41,9 @@ class Movie(Base):
         server_default=MovieVisibility.PUBLIC,
     )
     additional_keywords = Column(JSONB, nullable=True)
-    embedding = Column(Vector(384))
+    embedding = Column(Vector(768))
+    origin_country = Column(JSON, nullable=True)
+    original_language = Column(String, nullable=True)
+    original_title = Column(String, nullable=True)
+    runtime = Column(Integer, nullable=True)
+    tagline = Column(String, nullable=True)
