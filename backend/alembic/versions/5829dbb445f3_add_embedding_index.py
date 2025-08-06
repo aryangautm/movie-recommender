@@ -1,8 +1,8 @@
-"""add embedding index
+"""add_embedding_index
 
-Revision ID: f2ed396ecd89
-Revises: ff8091025c54
-Create Date: 2025-08-05 01:52:12.729790
+Revision ID: 5829dbb445f3
+Revises: be68afef1585
+Create Date: 2025-08-05 18:11:07.551435
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "f2ed396ecd89"
-down_revision: Union[str, Sequence[str], None] = "ff8091025c54"
+revision: str = "5829dbb445f3"
+down_revision: Union[str, Sequence[str], None] = "be68afef1585"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

@@ -1,19 +1,20 @@
-"""add embedding column
+"""add_embedding_column
 
-Revision ID: ff8091025c54
+Revision ID: be68afef1585
 Revises: 9aa279ea4365
-Create Date: 2025-08-05 01:39:30.796215
+Create Date: 2025-08-05 18:10:35.526870
 
 """
 
 from typing import Sequence, Union
-import pgvector.sqlalchemy
+
 from alembic import op
 import sqlalchemy as sa
+import pgvector.sqlalchemy
 
 
 # revision identifiers, used by Alembic.
-revision: str = "ff8091025c54"
+revision: str = "be68afef1585"
 down_revision: Union[str, Sequence[str], None] = "9aa279ea4365"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -25,7 +26,7 @@ def upgrade() -> None:
     op.add_column(
         "movies",
         sa.Column(
-            "embedding", pgvector.sqlalchemy.vector.VECTOR(dim=384), nullable=True
+            "embedding", pgvector.sqlalchemy.vector.VECTOR(dim=768), nullable=True
         ),
     )
     # ### end Alembic commands ###

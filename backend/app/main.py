@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from app.api.v1.routes import api_router
 from app.core.config import settings
 from app.core.graph import close_graph_connection, connect_to_graph
+from app.core.embedding_model import get_embedding_model
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -14,6 +15,7 @@ async def lifespan(app: FastAPI):
     for on_event("startup") and on_event("shutdown").
     """
     connect_to_graph()
+    get_embedding_model()
     yield
     close_graph_connection()
 
