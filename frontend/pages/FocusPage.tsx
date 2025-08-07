@@ -182,7 +182,7 @@ const FocusPage: React.FC = () => {
               key={suggestion.id}
               suggestion={suggestion}
               index={index + 1}
-              onUpvote={handleRefreshSuggestions}
+              sourceMovieId={movie.id}
             />
           ))}
         </div>

@@ -1,17 +1,21 @@
 
 import React, { useState } from 'react';
-import { Movie, Suggestion } from '../App';
-import { UpArrowIcon, CheckIcon, SpinnerIcon } from './icons';
+import { useNavigate } from 'react-router-dom';
+import { Suggestion } from '../App';
+import { UpArrowIcon, SpinnerIcon } from './icons';
+import { getFingerprint } from '../utils/fingerprint';
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
   index: number;
-  onUpvote: () => void;
+  sourceMovieId: number;
 }
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
 const POSTER_SIZE = 'w300';
+const BACKEND_BASE_URL = 'http://localhost:8000';
 
-const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, onUpvote }) => {
+const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sourceMovieId }) => {
+  const navigate = useNavigate();
   const posterUrl = suggestion.posterPath
     ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${suggestion.posterPath}`
     : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(suggestion.title)}`;
@@ -23,21 +27,40 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, onUp
     if (upvoteState !== 'idle') return;
 
     setUpvoteState('loading');
-    // Simulate API call
-    await new Promise(res => setTimeout(res, 1000));
 
-    // For this example, we'll assume it always succeeds.
-    setUpvoteState('success');
+    try {
+      const fingerprint = await getFingerprint();
+      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/upvote/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          movie_id_1: sourceMovieId,
+          movie_id_2: suggestion.id,
+          fingerprint: fingerprint,
+        }),
+      });
 
-    // Simulate a delay before refreshing suggestions
-    await new Promise(res => setTimeout(res, 500));
-    onUpvote();
+      if (!response.ok) {
+        throw new Error('Upvote failed');
+      }
+
+      setUpvoteState('success');
+    } catch (error) {
+      console.error(error);
+      setUpvoteState('idle'); // Revert to idle on failure
+    }
+  };
+
+  const handleCardClick = () => {
+    navigate(`/movie/${suggestion.id}`);
   };
 
   return (
-    <div className="flex items-start gap-4">
+    <div className="flex items-start gap-4 cursor-pointer" onClick={handleCardClick}>
       <span className="text-xl font-medium text-white/50 pt-3">{index}.</span>
-      <div className="flex-grow bg-white/[.03] hover:bg-white/10 p-3 rounded-2xl flex items-center gap-4 transition-all duration-300 border border-white/10 cursor-pointer group">
+      <div className="flex-grow bg-white/[.03] hover:bg-white/10 p-3 rounded-2xl flex items-center gap-4 transition-all duration-300 border border-white/10 group">
         <div className="relative flex-shrink-0">
           <div className="absolute inset-0 bg-black/20 rounded-lg -z-10"></div>
           <img
