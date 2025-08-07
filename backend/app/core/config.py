@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str
 
+    MAX_VOTES_PER_DAY: int = 4
     TMDB_API_KEY: str
     TMDB_API_V4_ACCESS_TOKEN: str
     DATABASE_URL: str

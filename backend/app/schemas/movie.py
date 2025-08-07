@@ -38,6 +38,7 @@ class MovieSearchResult(BaseModel):
     backdrop_path: Optional[str]
     poster_path: Optional[str]
     ai_keywords: Optional[List[Any]] = Field(alias="keywords")
+    tagline: Optional[str] = None
 
     class Config:
         from_attributes = True
