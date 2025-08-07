@@ -2,6 +2,9 @@ from typing import Tuple
 
 import redis.asyncio as redis
 from neo4j import Driver
+from app.models.vote_log import VoteLog
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.config import settings
 
 VOTE_COOLDOWN_SECONDS = 90 * 24 * 60 * 60
 
@@ -40,11 +43,16 @@ def process_similarity_vote_in_graph(
     from ..utils.scoring import calculate_effective_score
 
     query = """
-    MATCH (a:Movie {tmdb_id: $id1}), (b:Movie {tmdb_id: $id2})
+    MATCH (a:Movie {tmdb_id: $id1})
+    MATCH (b:Movie {tmdb_id: $id2})
     MERGE (a)-[r:IS_SIMILAR_TO]-(b)
-    ON CREATE SET r.user_votes = 1, r.similarity_score = null, r.ai_score = null
-    ON MATCH SET r.user_votes = coalesce(r.user_votes, 0) + 1
-    RETURN 
+    ON CREATE SET
+        r.user_votes = 1,
+        r.similarity_score = null,
+        r.ai_score = null
+    ON MATCH SET
+        r.user_votes = coalesce(r.user_votes, 0) + 1
+    RETURN
         r.user_votes AS user_votes,
         r.ai_score AS ai_score,
         r.similarity_score AS similarity_score
@@ -70,3 +78,48 @@ def process_similarity_vote_in_graph(
             update_query, id1=movie_id_1, id2=movie_id_2, score=new_effective_score
         )
         return True
+
+
+async def log_vote(
+    db: AsyncSession,
+    fingerprint_id: str,
+    source_movie_id: int,
+    target_movie_id: int,
+    vote_type: VoteType,
+    reference_id: int | None = None,
+):
+    """Logs a vote to the persistent audit trail in PostgreSQL."""
+    log_entry = VoteLog(
+        fingerprint_id=fingerprint_id,
+        source_movie_id=source_movie_id,
+        target_movie_id=target_movie_id,
+        vote_type=vote_type,
+        reference_id=reference_id,
+    )
+    db.add(log_entry)
+    await db.commit()
+
+
+def _get_daily_count_key(fingerprint_id: str) -> str:
+    """Creates a Redis key for the daily vote counter."""
+    return f"vote_count:daily:{fingerprint_id}"
+
+
+async def check_and_increment_daily_vote_count(
+    redis_client: redis.Redis, fingerprint_id: str
+) -> bool:
+    """
+    Atomically increments the daily vote counter for a fingerprint and checks if
+    it has exceeded the limit. Returns True if the vote is allowed, False otherwise.
+    """
+    key = _get_daily_count_key(fingerprint_id)
+
+    # Use a pipeline for an atomic transaction
+    pipe = redis_client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, 86400, nx=True)  # Set a 24h expiry only if the key is new
+    results = await pipe.execute()
+
+    current_count = results[0]
+
+    return current_count <= settings.MAX_VOTES_PER_DAY

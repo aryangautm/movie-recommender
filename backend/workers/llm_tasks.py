@@ -23,7 +23,7 @@ neo4j_driver: Driver = None
 
 def get_neo4j_driver():
     global neo4j_driver
-    if neo4j_driver is None or not neo4j_driver.is_open():
+    if neo4j_driver is None or neo4j_driver._closed:
         try:
             neo4j_driver = GraphDatabase.driver(
                 settings.NEO4J_URI,
@@ -63,7 +63,7 @@ def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
     logger.info(f"Processing similarity vote between {movie_id_1} and {movie_id_2}")
     try:
         global DRIVER
-        if not DRIVER or not DRIVER.is_open():
+        if not DRIVER or DRIVER._closed:
             DRIVER = get_neo4j_driver()
 
         try:
