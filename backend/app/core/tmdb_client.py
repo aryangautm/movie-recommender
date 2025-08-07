@@ -2,6 +2,7 @@ import httpx
 from typing import Optional, Dict, Any
 from functools import lru_cache
 from .config import settings
+import requests
 
 # Constants
 TMDB_API_URL = "https://api.themoviedb.org/3"
@@ -56,7 +57,6 @@ class TMDbClient:
         """
         return await self._make_request(client, f"/movie/{movie_id}/images")
 
-    @lru_cache(maxsize=1)
     def get_genre_map(self) -> Dict[int, str]:
         """
         Fetches the genre ID to name mapping from TMDb.
@@ -64,14 +64,11 @@ class TMDbClient:
         """
         print("Fetching genre map from TMDb API...")
         try:
-            with httpx.Client() as client:
-                params = self.params
-                response = client.get(
-                    f"{self.base_url}/genre/movie/list", params=params
-                )
-                response.raise_for_status()
-                genres = response.json().get("genres", [])
-                return {genre["id"]: genre["name"] for genre in genres}
+            params = self.params
+            response = requests.get(f"{self.base_url}/genre/movie/list", params=params)
+            response.raise_for_status()
+            genres = response.json().get("genres", [])
+            return {genre["id"]: genre["name"] for genre in genres}
         except Exception as e:
             print(f"Failed to fetch genre map from TMDb: {e}")
             return {}  # Return empty dict on failure

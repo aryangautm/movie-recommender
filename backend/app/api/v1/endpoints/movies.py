@@ -38,10 +38,7 @@ async def get_trending_movies(
         return cached_data
 
     # 2. If cache miss, fetch from TMDb
-    genre_map_task = asyncio.to_thread(tmdb_client.get_genre_map)
-    trending_data_task = await tmdb_client.fetch_trending_from_tmdb(page=page)
-
-    genre_map, trending_data = await asyncio.gather(genre_map_task, trending_data_task)
+    genre_map = tmdb_client.get_genre_map()
 
     trending_data = await tmdb_client.fetch_trending_from_tmdb(page=page)
     if not trending_data:
