@@ -8,7 +8,7 @@ import FocusPage from './pages/FocusPage';
 import { Header } from '@/components/ui/Header';
 
 export interface Movie {
-  id: number;
+  id: string;
   title: string;
   overview: string;
   year: number;
@@ -22,7 +22,7 @@ export interface Movie {
 }
 
 export interface Suggestion {
-  id: number;
+  id: string;
   title: string;
   overview: string;
   releaseYear: number;
