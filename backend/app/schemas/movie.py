@@ -1,7 +1,8 @@
 from typing import List, Optional, Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_serializer
 from datetime import date
+from app.utils.encryption import encrypt_id
 
 
 class Genre(BaseModel):
@@ -28,6 +29,11 @@ class Movie(MovieBase):
     class Config:
         from_attributes = True
 
+    @field_serializer("id")
+    def serialize_id(self, id: int) -> str:
+        print(f"Encrypting ID: {id}")
+        return encrypt_id(id)
+
 
 class MovieSearchResult(BaseModel):
     id: int
@@ -43,6 +49,11 @@ class MovieSearchResult(BaseModel):
     class Config:
         from_attributes = True
         populate_by_name = True
+
+    @field_serializer("id")
+    def serialize_id(self, id: int) -> str:
+        print(f"Encrypting ID: {id}")
+        return encrypt_id(id)
 
 
 class SimilarMovie(Movie):

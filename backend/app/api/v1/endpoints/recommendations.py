@@ -17,7 +17,7 @@ model = get_embedding_model()
 
 
 @router.post(
-    "/",
+    "",
     response_model=schemas.recommendation.RecResponse,
     status_code=status.HTTP_200_OK,
 )
