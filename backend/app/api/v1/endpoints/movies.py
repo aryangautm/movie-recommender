@@ -15,6 +15,7 @@ from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie, TrendingMo
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tmdb_client import tmdb_client
+from app.utils.encryption import decrypt_id
 
 router = APIRouter()
 CACHE_TTL_SECONDS = 86400
@@ -38,7 +39,7 @@ async def get_trending_movies(
         return cached_data
 
     # 2. If cache miss, fetch from TMDb
-    genre_map = tmdb_client.get_genre_map()
+    genre_map = await tmdb_client.get_genre_map()
 
     trending_data = await tmdb_client.fetch_trending_from_tmdb(page=page)
     if not trending_data:
@@ -94,11 +95,11 @@ async def search_movies(
 
 
 @router.get("/{movie_id}", response_model=Movie)
-async def read_movie(movie_id: int, db: AsyncSession = Depends(get_async_db)):
+async def read_movie(movie_id: str, db: AsyncSession = Depends(get_async_db)):
     """
     Get a single movie by its TMDb ID.
     """
-    db_movie = await get_movie_by_id(db, movie_id=movie_id)
+    db_movie = await get_movie_by_id(db, movie_id=decrypt_id(movie_id))
     if db_movie is None:
         raise HTTPException(status_code=404, detail="Movie not found")
     return db_movie

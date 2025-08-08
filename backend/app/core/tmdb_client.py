@@ -57,21 +57,28 @@ class TMDbClient:
         """
         return await self._make_request(client, f"/movie/{movie_id}/images")
 
-    def get_genre_map(self) -> Dict[int, str]:
+    async def get_genre_map(self) -> Dict[int, str]:
         """
         Fetches the genre ID to name mapping from TMDb.
         The result is cached in memory for the lifetime of the process.
         """
         print("Fetching genre map from TMDb API...")
         try:
-            params = self.params
-            response = requests.get(f"{self.base_url}/genre/movie/list", params=params)
-            response.raise_for_status()
-            genres = response.json().get("genres", [])
-            return {genre["id"]: genre["name"] for genre in genres}
-        except Exception as e:
-            print(f"Failed to fetch genre map from TMDb: {e}")
-            return {}  # Return empty dict on failure
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.base_url}/genre/movie/list", params=self.params
+                )
+                response.raise_for_status()
+                genres = response.json().get("genres", [])
+                return {genre["id"]: genre["name"] for genre in genres}
+        except httpx.RequestError as e:
+            print(f"An error occurred while requesting TMDb: {e}")
+            return {}
+        except httpx.HTTPStatusError as e:
+            print(
+                f"TMDb API returned an error: {e.response.status_code} - {e.response.text}"
+            )
+            return {}
 
     async def fetch_trending_from_tmdb(self, page: int = 1) -> Dict[str, Any]:
         """
