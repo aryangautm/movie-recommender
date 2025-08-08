@@ -8,7 +8,7 @@ import { getFingerprint } from '../utils/fingerprint';
 interface SuggestionCardProps {
   suggestion: Suggestion;
   index: number;
-  sourceMovieId: number;
+  sourceMovieId: string;
 }
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
 const POSTER_SIZE = 'w300';

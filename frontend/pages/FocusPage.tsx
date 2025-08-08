@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Movie, Suggestion } from '@/App';
-import { LeftArrowInCircleIcon, SpinnerIcon } from '@/components/icons';
+import { SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
-import { Header } from '@/components/ui/Header';
 import KeywordSelector from '@/components/KeywordSelector';
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
@@ -80,7 +79,7 @@ const FocusPage: React.FC = () => {
       let keywords = options?.keywords || [];
 
       console.log('Finding recommendations based on keywords:', keywords);
-      response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations/`, {
+      response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
