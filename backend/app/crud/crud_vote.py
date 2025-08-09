@@ -2,7 +2,7 @@ from typing import Tuple
 
 import redis.asyncio as redis
 from neo4j import Driver
-from app.models.vote_log import VoteLog
+from app.models.vote_log import VoteLog, VoteType
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 
@@ -80,24 +80,24 @@ def process_similarity_vote_in_graph(
         return True
 
 
-# async def log_vote(
-#     db: AsyncSession,
-#     fingerprint_id: str,
-#     source_movie_id: int,
-#     target_movie_id: int,
-#     vote_type: VoteType,
-#     reference_id: int | None = None,
-# ):
-#     """Logs a vote to the persistent audit trail in PostgreSQL."""
-#     log_entry = VoteLog(
-#         fingerprint_id=fingerprint_id,
-#         source_movie_id=source_movie_id,
-#         target_movie_id=target_movie_id,
-#         vote_type=vote_type,
-#         reference_id=reference_id,
-#     )
-#     db.add(log_entry)
-#     await db.commit()
+async def log_vote(
+    db: AsyncSession,
+    fingerprint_id: str,
+    source_movie_id: int,
+    target_movie_id: int,
+    vote_type: VoteType,
+    reference_id: int | None = None,
+):
+    """Logs a vote to the persistent audit trail in PostgreSQL."""
+    log_entry = VoteLog(
+        fingerprint_id=fingerprint_id,
+        source_movie_id=source_movie_id,
+        target_movie_id=target_movie_id,
+        vote_type=vote_type,
+        reference_id=reference_id,
+    )
+    db.add(log_entry)
+    await db.commit()
 
 
 def _get_daily_count_key(fingerprint_id: str) -> str:
