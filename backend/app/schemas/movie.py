@@ -17,6 +17,7 @@ class MovieBase(BaseModel):
     poster_path: Optional[str] = None
     backdrop_path: Optional[str] = None
     genres: Optional[List[Genre]] = []
+    ai_keywords: Optional[List[Any]] = Field(alias="keywords")
 
 
 class MovieCreate(MovieBase):
@@ -31,7 +32,6 @@ class Movie(MovieBase):
 
     @field_serializer("id")
     def serialize_id(self, id: int) -> str:
-        print(f"Encrypting ID: {id}")
         return encrypt_id(id)
 
 
@@ -52,7 +52,6 @@ class MovieSearchResult(BaseModel):
 
     @field_serializer("id")
     def serialize_id(self, id: int) -> str:
-        print(f"Encrypting ID: {id}")
         return encrypt_id(id)
 
 

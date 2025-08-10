@@ -100,6 +100,10 @@ async def read_movie(movie_id: str, db: AsyncSession = Depends(get_async_db)):
     Get a single movie by its TMDb ID.
     """
     db_movie = await get_movie_by_id(db, movie_id=decrypt_id(movie_id))
-    if db_movie is None:
+    movie_data = db_movie.__dict__
+    movie_data["keywords"] = [
+        keyword.replace(".", "").capitalize() for keyword in db_movie.ai_keywords or []
+    ]
+    if movie_data is None:
         raise HTTPException(status_code=404, detail="Movie not found")
-    return db_movie
+    return movie_data
