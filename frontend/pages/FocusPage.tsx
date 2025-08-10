@@ -125,9 +125,10 @@ const FocusPage: React.FC = () => {
       setSuggestionState('selecting');
       setIsLoadingSuggestions(false);
     } else {
-      fetchSuggestions();
+      setSuggestionState('showing');
+      setSuggestions([]);
     }
-  }, [movie, fetchSuggestions]);
+  }, [movie]);
 
 
   const handleFindSimilar = (selectedKeywords: string[]) => {
