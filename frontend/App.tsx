@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { createContext, useState, useContext } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { WavingHandIcon } from './components/icons';
 import HeaderNavigation from './components/HeaderNavigation';
@@ -30,34 +30,53 @@ export interface Suggestion {
   justification?: string[];
 }
 
+interface HeaderContextType {
+  centerContent: React.ReactNode;
+  setCenterContent: (content: React.ReactNode) => void;
+}
+
+const HeaderContext = createContext<HeaderContextType | undefined>(undefined);
+
+export const useHeader = () => {
+  const context = useContext(HeaderContext);
+  if (!context) {
+    throw new Error('useHeader must be used within a HeaderProvider');
+  }
+  return context;
+};
+
 const App: React.FC = () => {
+  const [centerContent, setCenterContent] = useState<React.ReactNode>(null);
+
   return (
-    <div data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
-      <Header.Root>
-        <Header.Left className="hidden sm:flex">
-          <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
-            <WavingHandIcon />
-            <span>Hey!</span>
-          </div>
-        </Header.Left>
+    <HeaderContext.Provider value={{ centerContent, setCenterContent }}>
+      <div data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
+        <Header.Root>
+          <Header.Left className="hidden sm:flex">
+            <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
+              <WavingHandIcon />
+              <span>Hey!</span>
+            </div>
+          </Header.Left>
 
-        <Header.Center>
-          <HeaderNavigation />
-        </Header.Center>
+          <Header.Center>
+            {centerContent || <HeaderNavigation />}
+          </Header.Center>
 
-        <Header.Right className="hidden sm:flex"><div /></Header.Right>
-      </Header.Root>
+          <Header.Right className="hidden sm:flex"><div /></Header.Right>
+        </Header.Root>
 
-      <div className="relative z-10 flex flex-col min-h-screen">
-        <main className="relative flex-grow pt-24 sm:pt-32">
-          <Routes>
-            <Route path="/" element={<SearchPage />} />
-            <Route path="/movies/trending" element={<TrendingPage />} />
-            <Route path="/movie/:id" element={<FocusPage />} />
-          </Routes>
-        </main>
+        <div className="relative z-10 flex flex-col min-h-screen">
+          <main className="relative flex-grow pt-24 sm:pt-32">
+            <Routes>
+              <Route path="/" element={<SearchPage />} />
+              <Route path="/movies/trending" element={<TrendingPage />} />
+              <Route path="/movie/:id" element={<FocusPage />} />
+            </Routes>
+          </main>
+        </div>
       </div>
-    </div>
+    </HeaderContext.Provider>
   );
 };
 
