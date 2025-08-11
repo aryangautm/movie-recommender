@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Movie, Suggestion } from '@/App';
+import { Movie, Suggestion, useHeader } from '@/App';
 import { SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
 import KeywordSelector from '@/components/KeywordSelector';
@@ -16,6 +16,8 @@ const FocusPage: React.FC = () => {
   const [movie, setMovie] = useState<Movie | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { setCenterContent } = useHeader();
+  const [isScrolled, setIsScrolled] = useState(false);
 
   type SuggestionState = 'selecting' | 'loading' | 'showing';
 
@@ -23,6 +25,29 @@ const FocusPage: React.FC = () => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 400);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  useEffect(() => {
+    if (isScrolled && movie) {
+      setCenterContent(
+        <div className="text-2xl font-semibold truncate">{movie.title} ({movie.year})</div>
+      );
+    } else {
+      setCenterContent(<div />);
+    }
+
+    return () => {
+      setCenterContent(null);
+    };
+  }, [isScrolled, movie, setCenterContent]);
 
   useEffect(() => {
     const fetchMovie = async () => {
