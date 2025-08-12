@@ -118,19 +118,6 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://127.0.0.1:8000`. You can access the interactive documentation at `http://127.0.0.1:8000/docs`.
 
----
-
-## 🗺️ Project Roadmap (Future Work)
-
-The current version provides the core read-only recommendation engine. Future development will focus on:
-
--   [ ] **Phase 2: Frontend UI** - Building the complete React-based user interface.
--   [ ] **Phase 3: Interactive Voting** - Implementing anonymous and user-based voting to refine the graph.
--   [ ] **Phase 4: User Accounts & Profiles** - Allowing users to create "taste profiles" and get personalized recommendations.
--   [ ] **Phase 5: Advanced Moderation** - Building a trust score system to weigh community votes.
-
----
-
 ## 📜 License
 
 This project is licensed under the Apache-2.0 License. See the `LICENSE` file for details.
