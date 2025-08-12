@@ -116,6 +116,14 @@ python -m scripts.seed_graph
 uvicorn app.main:app --reload
 ```
 
+### 6. Run Celery Worker (Optional, for V2 features)
+```bash
+celery -A workers.celery_config worker -P eventlet -c 100 -l info -Q ingestion_queue -n ingestion_worker@%h
+```
+```bash
+celery -A workers.celery_config worker -P eventlet -c 100 -l info -Q llm_queue -n llm_worker@%h
+```
+
 The API will be available at `http://127.0.0.1:8000`. You can access the interactive documentation at `http://127.0.0.1:8000/docs`.
 
 ## 📜 License
