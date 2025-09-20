@@ -19,7 +19,18 @@ def parse_llm_recommendations(content):
 
         if end_index == -1:
             print(f"'{start_marker}' found, but no matching '{end_marker}' afterwards.")
-            return None
+            # Try to parse whatever remains after the start marker as JSON
+            fallback_json_string = content[json_content_start:].strip()
+            if not fallback_json_string:
+                return None
+            try:
+                data = json.loads(fallback_json_string)
+                print(
+                    "JSON data successfully extracted and loaded (no end marker found)!"
+                )
+                return data
+            except json.JSONDecodeError:
+                return None
 
         json_string = content[json_content_start:end_index].strip()
 

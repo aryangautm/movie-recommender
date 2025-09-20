@@ -3,7 +3,7 @@ import httpx
 import asyncio
 from typing import List
 import redis.asyncio as redis
-from app.core.database import get_async_db
+from app.core.database import get_async_db, SessionLocal
 from app.core.redis import get_redis_client
 from app.crud.crud_movie import (
     get_movie_by_id,
@@ -16,6 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tmdb_client import tmdb_client
 from app.utils.encryption import decrypt_id
+from workers.celery_config import celery_app
+from app.models.processing_queue import TriggerSource
+from app.crud import crud_processing_queue
 
 router = APIRouter()
 CACHE_TTL_SECONDS = 86400
@@ -39,7 +42,7 @@ async def get_trending_movies(
         return cached_data
 
     # 2. If cache miss, fetch from TMDb
-    genre_map = await tmdb_client.get_genre_map()
+    genre_map = tmdb_client.get_genre_map()
 
     trending_data = await tmdb_client.fetch_trending_from_tmdb(page=page)
     if not trending_data:
@@ -63,13 +66,32 @@ async def get_trending_movies(
 
         # This DB call is synchronous but very fast (a single indexed query)
         new_movie_ids = await filter_existing_movie_ids(db, movie_ids)
+        new_movies_to_process = []
 
-        # if new_movie_ids:
-        #     new_movies_data = [
-        #         movie for movie in trending_movies if movie["id"] in new_movie_ids
-        #     ]
-        #     # Dispatch the background task and DO NOT wait for it
-        #     celery_app.send_task("tasks.ingest_new_movies", args=[new_movies_data])
+        for movie in trending_movies:
+            if movie["id"] in new_movie_ids:
+                new_movies_to_process.append(
+                    {
+                        "source_movie_id": movie["id"],
+                        "title": movie["title"],
+                        "properties": movie,
+                        "trigger_source": TriggerSource.TRENDING,
+                    }
+                )
+
+        if new_movies_to_process:
+            print(
+                "New movies found, adding to processing queue...",
+                len(new_movies_to_process),
+            )
+            with SessionLocal() as sync_db:
+                crud_processing_queue.bulk_create_process(
+                    sync_db, new_movies_to_process
+                )
+            celery_app.send_task(
+                "tasks.ingest_recommended_movies",
+                queue="ingestion_queue",
+            )
 
     return trending_data
 

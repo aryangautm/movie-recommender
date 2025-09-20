@@ -1,5 +1,4 @@
 import logging
-from celery import Celery
 from celery.signals import worker_shutdown
 from neo4j import Driver, GraphDatabase
 from typing import List, Dict, Any
@@ -15,7 +14,7 @@ from app.utils import llm_parser
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from .celery_config import celery_app
+from workers.celery_config import celery_app
 
 
 neo4j_driver: Driver = None
@@ -51,9 +50,9 @@ def shutdown_neo4j_driver(**kwargs):
 
 @celery_app.task(
     name="tasks.process_similarity_vote",
-    bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={"max_retries": 3, "countdown": 5},
+    bind=True,
 )
 def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
     """
@@ -102,7 +101,6 @@ def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
 def generate_and_cache_llm_rec(
     source_movie_id: int, keywords: List[str], trigger_hash: str
 ):
-    print("Generating LLM recommendations...")
     with SessionLocal() as db:
         print(
             f"Generating LLM recommendations for movie ID {source_movie_id} with keywords {keywords}."

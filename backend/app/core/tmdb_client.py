@@ -57,16 +57,18 @@ class TMDbClient:
         """
         return await self._make_request(client, f"/movie/{movie_id}/images")
 
-    async def get_genre_map(self) -> Dict[int, str]:
+    def get_genre_map(self) -> Dict[int, str]:
         """
         Fetches the genre ID to name mapping from TMDb.
         The result is cached in memory for the lifetime of the process.
         """
         print("Fetching genre map from TMDb API...")
         try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.base_url}/genre/movie/list", params=self.params
+            with httpx.Client() as client:
+                response = client.get(
+                    f"{self.base_url}/genre/movie/list",
+                    params=self.params,
+                    timeout=REQUEST_TIMEOUT,
                 )
                 response.raise_for_status()
                 genres = response.json().get("genres", [])
@@ -132,6 +134,23 @@ class TMDbClient:
             return movie_data
         except httpx.RequestError as e:
             print(f"An error occurred while searching for movies: {e}")
+            return None
+
+    def get_movie_by_id(self, movie_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Fetches movie details by TMDb movie ID.
+        """
+        try:
+            movie_data = None
+            with httpx.Client() as client:
+                response = client.get(
+                    f"{self.base_url}/movie/{movie_id}", params=self.params
+                )
+                response.raise_for_status()
+                movie_data = response.json()
+            return movie_data
+        except httpx.RequestError as e:
+            print(f"An error occurred while fetching movie by id: {e}")
             return None
 
 

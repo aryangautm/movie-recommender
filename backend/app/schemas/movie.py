@@ -17,7 +17,7 @@ class MovieBase(BaseModel):
     poster_path: Optional[str] = None
     backdrop_path: Optional[str] = None
     genres: Optional[List[Genre]] = []
-    ai_keywords: Optional[List[Any]] = Field(alias="keywords")
+    ai_keywords: Optional[List[Any]] = Field(alias="keywords", default=[])
 
 
 class MovieCreate(MovieBase):

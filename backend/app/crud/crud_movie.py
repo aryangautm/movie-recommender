@@ -334,7 +334,7 @@ def enrich_recommendations_with_db_data(
                 kw.translate(translation_table).strip().capitalize()
                 for kw in justification_keywords
             ]
-            final_object = LLMRecResult(
+            final_object = dict(
                 id=matched_movie.id,
                 title=matched_movie.title,
                 overview=matched_movie.overview,
@@ -343,7 +343,7 @@ def enrich_recommendations_with_db_data(
                 justification=justification_keywords,
                 ai_score=rec.get("similarity_score", 0.0),
             )
-            final_results.append(final_object.model_dump())
+            final_results.append(final_object)
         else:
             properties = {
                 k: v for k, v in rec.items() if k not in ["movie_title", "release_year"]
