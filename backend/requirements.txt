@@ -14,5 +14,6 @@ alembic
 asyncpg
 httpx
 scikit-learn
+google-genai
 eventlet==0.40.2
 pgvector==0.4.1

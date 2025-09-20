@@ -8,10 +8,6 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.preprocessing import MultiLabelBinarizer
 from app.utils.scoring import calculate_effective_score
-
-# Add parent directory to path to allow imports from 'app'
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.models.movie import Movie

@@ -13,7 +13,7 @@ from app.core.tmdb_client import tmdb_client
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from .celery_config import celery_app
+from workers.celery_config import celery_app
 
 
 @celery_app.task(
@@ -28,7 +28,7 @@ def ingest_recommended_movies():
     with SessionLocal() as db:
         try:
             pending_movies = crud_processing_queue.get_movies_by_sources(
-                db, [TriggerSource.RECOMMENDATION]
+                db, [TriggerSource.RECOMMENDATION, TriggerSource.TRENDING]
             )
             crud_processing_queue.bulk_patch_process(
                 db,
@@ -47,7 +47,7 @@ def ingest_recommended_movies():
 
             genre_map = tmdb_client.get_genre_map()
             for movie in tqdm(pending_movies, desc="Processing movies"):
-                if movie.release_year > datetime.now().year:
+                if movie.release_year and movie.release_year > datetime.now().year:
                     processes_to_update.append(
                         {
                             "id": movie.id,
@@ -56,9 +56,14 @@ def ingest_recommended_movies():
                         }
                     )
                     continue
-                movie_data = tmdb_client.search_movie(
-                    query=movie.title, release_year=movie.release_year
-                )
+
+                if movie.source_movie_id:
+                    movie_data = tmdb_client.get_movie_by_id(movie.source_movie_id)
+                else:
+                    movie_data = tmdb_client.search_movie(
+                        query=movie.title, release_year=movie.release_year
+                    )
+
                 if not movie_data:
                     processes_to_update.append(
                         {
