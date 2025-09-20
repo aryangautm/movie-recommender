@@ -58,3 +58,59 @@ def generate_recommendations(
     )
     response_str = response.text
     return response_str
+
+
+MTR_FILE = Path(__file__).parent / "multi_turn_rec_prompt.txt"
+
+with open(MTR_FILE, "r", encoding="utf-8") as f:
+    MTR_TXT = f.read().strip()
+
+
+def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]) -> None:
+    client = genai.Client(
+        api_key=settings.GEMINI_API_KEY,
+    )
+
+    USER_INPUT = f"""
+    **Liked Movie:**
+    `{movie.title} ({movie.release_date.year})`
+
+    **Full Keyword List:**
+    `{movie.ai_keywords}`
+
+    **Liked Keywords (Focus on these for recommendations):**
+    `{selected_keywords}`
+    """
+
+    model = "gemini-2.5-flash"
+    contents = [
+        types.Content(
+            role="user",
+            parts=[
+                types.Part.from_text(text=USER_INPUT),
+            ],
+        ),
+    ]
+    tools = [
+        types.Tool(googleSearch=types.GoogleSearch()),
+    ]
+    generate_content_config = types.GenerateContentConfig(
+        temperature=0.25,
+        thinking_config=types.ThinkingConfig(
+            thinking_budget=0,
+        ),
+        system_instruction=[
+            types.Part.from_text(text=MTR_TXT),
+        ],
+        tools=tools,
+    )
+
+    chat = client.chats.create(
+        model=model,
+        config=generate_content_config,
+        history=contents,
+    )
+
+    response = chat.send_message("Recommend 5 movies")
+    response_str = response.text
+    return response_str
