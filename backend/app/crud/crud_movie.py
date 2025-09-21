@@ -334,17 +334,19 @@ def enrich_recommendations_with_db_data(
                 kw.translate(translation_table).strip().capitalize()
                 for kw in justification_keywords
             ]
-            final_object = dict(
-                id=matched_movie.id,
-                title=matched_movie.title,
-                overview=matched_movie.overview,
-                release_year=matched_movie.release_year,
-                poster_path=matched_movie.poster_path,
-                justification=justification_keywords,
-                ai_score=rec.get("similarity_score", 0.0),
+            final_results.append(
+                dict(
+                    id=matched_movie.id,
+                    title=matched_movie.title,
+                    overview=matched_movie.overview,
+                    release_year=matched_movie.release_year,
+                    poster_path=matched_movie.poster_path,
+                    justification=justification_keywords,
+                    ai_score=rec.get("similarity_score", 0.0),
+                )
             )
-            final_results.append(final_object)
         else:
+            # Movie not found in DB, queue for ingesting
             properties = {
                 k: v for k, v in rec.items() if k not in ["movie_title", "release_year"]
             }
@@ -359,12 +361,16 @@ def enrich_recommendations_with_db_data(
 
     print("done with enrichment")
     if movies_to_process:
-        crud_processing_queue.bulk_create_process(db, movies_to_process)
+        crud_processing_queue.bulk_create_process(
+            db, movies_to_process
+        )  # will append pending ingestion tasks
         celery_app.send_task(
             "tasks.ingest_recommended_movies",
             queue="ingestion_queue",
         )
+
     if additional_keywords:
+        # Save the keywords in the database
         try:
             data = [
                 {"id": movie_id, "additional_keywords": keywords}
@@ -373,6 +379,7 @@ def enrich_recommendations_with_db_data(
             update_additional_keywords(db, data)
         except Exception as e:
             print(f"Error during bulk patch of additional keywords: {e}")
+
     return final_results
 
 
