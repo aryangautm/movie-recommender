@@ -130,18 +130,9 @@ def generate_and_cache_llm_rec(
             for rec in enriched_recs
         ]
 
-        final_recs_with_ids = crud_recommendation.bulk_create_llm_recommendations(
-            db, recs_to_save
-        )
-
-        final_cached_data = []
-        rec_map = {rec["recommended_movie_id"]: rec for rec in final_recs_with_ids}
-        for enriched_rec in enriched_recs:
-            db_rec = rec_map.get(enriched_rec["id"])
-            if db_rec:
-                final_cached_data.append({**enriched_rec, "id": db_rec["id"]})
+        _ = crud_recommendation.bulk_create_llm_recommendations(db, recs_to_save)
 
     with sync_get_redis_client() as redis_client:
         crud_cache.cache_llm_recommendation(
-            redis_client, f"llm_rec:{trigger_hash}", final_cached_data
+            redis_client, f"llm_rec:{trigger_hash}", enriched_recs
         )

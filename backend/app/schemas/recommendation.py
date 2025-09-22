@@ -9,9 +9,10 @@ class RecRequest(BaseModel):
     source_movie_id: str = Field(
         ..., description="The TMDb ID of the movie the user liked."
     )
-    selected_keywords: Optional[List[str]] = Field(
-        [],
-        description="A list of AI-generated keywords the user selected.",
+    selected_keywords: List[str] = Field(
+        ...,
+        description="A list of AI-generated keywords the user selected (must be non-empty if provided).",
+        min_length=1,
     )
 
     @field_validator("source_movie_id", mode="after")

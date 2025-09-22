@@ -293,7 +293,7 @@ def enrich_recommendations_with_db_data(
     Returns:
         A list of dictionaries matching the LLMRecommendationResult schema, ready for caching.
     """
-    if not parsed_recs and not parsed_recs.get("movies"):
+    if not parsed_recs or not parsed_recs.get("movies"):
         return []
 
     search_conditions = []
