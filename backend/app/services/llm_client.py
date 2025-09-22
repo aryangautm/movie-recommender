@@ -61,7 +61,7 @@ def generate_recommendations(
     elapsed_ms = time.perf_counter() - start_ts
     print("Time to generate one batch", f"{elapsed_ms:.1f}", "seconds")
     response_str = response.text
-    yield response_str
+    return response_str
 
 
 MTR_FILE = Path(__file__).parent / "multi_turn_rec_prompt.txt"
@@ -74,7 +74,7 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
     client = genai.Client(
         api_key=settings.GEMINI_API_KEY,
     )
-    count = 2
+    count = 6
 
     USER_INPUT = f"""
     **Liked Movie:**
@@ -109,7 +109,7 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
             thinking_budget=0,
         ),
         system_instruction=[
-            types.Part.from_text(text=MTR_TXT.format(count=count)),
+            types.Part.from_text(text=MTR_TXT),
         ],
         tools=tools,
     )
@@ -119,7 +119,7 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
         config=generate_content_config,
         history=contents,
     )
-    for i in range(6 / count):
+    for i in range(40 // count):
         start_ts = time.perf_counter()
         response = chat.send_message(f"Recommend {count} more movies")
         elapsed_ms = time.perf_counter() - start_ts

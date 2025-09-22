@@ -97,14 +97,13 @@ const FocusPage: React.FC = () => {
     setIsLoadingSuggestions(true);
     setSuggestionState('loading');
     setSuggestionError(null);
+    setSuggestions([]); // Clear existing suggestions for fresh start
 
     try {
-      let data;
-      let response;
       let keywords = options?.keywords || [];
 
       console.log('Finding recommendations based on keywords:', keywords);
-      response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations`, {
+      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -114,29 +113,118 @@ const FocusPage: React.FC = () => {
           selected_keywords: keywords,
         }),
       });
-      if (!response.ok) { throw new Error('Network response for recommendations was not ok'); }
-      const result = await response.json();
-      data = result.results;
 
-      const formattedSuggestions: Suggestion[] = data.map((item: any) => ({
-        id: item.id,
-        title: item.title,
-        releaseYear: item.release_year,
-        posterPath: item.poster_path,
-        overview: item.overview || `Overview for "${item.title}" is not available.`,
-        justification: item.justification || [],
-      }));
+      if (!response.ok) {
+        throw new Error('Network response for recommendations was not ok');
+      }
 
-      setSuggestions(formattedSuggestions);
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      // Switch to showing state immediately to enable real-time updates
       setSuggestionState('showing');
+      setIsLoadingSuggestions(false); // Stop loading spinner to show content as it comes
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+
+          if (done) {
+            console.log('Stream completed');
+            break;
+          }
+
+          // Decode the chunk and add to buffer
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete lines (NDJSON format)
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // Keep the incomplete line in buffer
+
+          for (const line of lines) {
+            if (line.trim()) {
+              try {
+                const chunk = JSON.parse(line);
+                console.log('Processing chunk:', chunk);
+
+                if (chunk.results && Array.isArray(chunk.results)) {
+                  const newSuggestions: Suggestion[] = chunk.results.map((item: any) => ({
+                    id: item.id,
+                    title: item.title,
+                    releaseYear: item.release_year,
+                    posterPath: item.poster_path,
+                    overview: item.overview || `Overview for "${item.title}" is not available.`,
+                    justification: item.justification || [],
+                  }));
+
+                  console.log('Parsed new suggestions:', newSuggestions.length);
+
+                  // Update suggestions using the functional setState pattern to ensure we get the latest state
+                  setSuggestions(prevSuggestions => {
+                    // Create a map of existing suggestions for efficient lookup
+                    const existingIds = new Set(prevSuggestions.map(s => s.id));
+
+                    // Filter out duplicates from new suggestions
+                    const uniqueNewSuggestions = newSuggestions.filter(s => !existingIds.has(s.id));
+
+                    console.log('Adding unique suggestions:', uniqueNewSuggestions.length);
+                    console.log('Total suggestions will be:', prevSuggestions.length + uniqueNewSuggestions.length);
+
+                    // Return new array with accumulated suggestions
+                    return [...prevSuggestions, ...uniqueNewSuggestions];
+                  });
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse chunk:', line, parseError);
+                // Continue processing other chunks even if one fails
+              }
+            }
+          }
+        }
+
+        // Process any remaining data in buffer
+        if (buffer.trim()) {
+          console.log('Processing final buffer:', buffer.substring(0, 100) + '...');
+          try {
+            const chunk = JSON.parse(buffer);
+            if (chunk.results && Array.isArray(chunk.results)) {
+              const finalSuggestions: Suggestion[] = chunk.results.map((item: any) => ({
+                id: item.id,
+                title: item.title,
+                releaseYear: item.release_year,
+                posterPath: item.poster_path,
+                overview: item.overview || `Overview for "${item.title}" is not available.`,
+                justification: item.justification || [],
+              }));
+
+              setSuggestions(prevSuggestions => {
+                const existingIds = new Set(prevSuggestions.map(s => s.id));
+                const uniqueFinalSuggestions = finalSuggestions.filter(s => !existingIds.has(s.id));
+                console.log('Adding final unique suggestions:', uniqueFinalSuggestions.length);
+                return [...prevSuggestions, ...uniqueFinalSuggestions];
+              });
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse final buffer:', buffer, parseError);
+          }
+        }
+
+      } finally {
+        reader.releaseLock();
+      }
+
     } catch (err: any) {
       console.error("Failed to fetch suggestions:", err);
       setSuggestionError(err.message || "Couldn't load suggestions. Please try again later.");
-      setSuggestions([]);
+      // Don't clear suggestions here - preserve any that were successfully loaded
       setSuggestionState('showing');
-    } finally {
-      setIsLoadingSuggestions(false);
     }
+    // Note: We don't set setIsLoadingSuggestions(false) here anymore as it's set earlier for real-time updates
   }, [movie]);
 
   useEffect(() => {
