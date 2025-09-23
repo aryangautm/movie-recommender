@@ -19,6 +19,7 @@ model = get_embedding_model()
 
 @router.post(
     "",
+    response_model=schemas.recommendation.RecResponse,
     status_code=status.HTTP_200_OK,
 )
 async def get_advanced_recommendations(
@@ -103,23 +104,15 @@ async def get_advanced_recommendations(
                 )
                 chunk_index += 1
 
-                yield json.dumps(
-                    {
+                yield schemas.recommendation.RecResponse(
+                    **{
                         "status": "partial",
                         "results": enriched_chunk,
-                        "perf": {
-                            "chunk_ms": round(chunk_elapsed, 2),
-                            "total_ms": round(total_elapsed, 2),
-                            "chunk_index": chunk_index,
-                        },
                     }
-                ) + "\n"
+                ).model_dump_json() + "\n"
 
         total_time = (time.time() - start_time) * 1000
         print(f"[profiling] total_time={total_time:.2f}ms chunks={chunk_index}")
-        yield json.dumps(
-            {"status": "complete", "perf": {"total_ms": round(total_time, 2)}}
-        ) + "\n"
 
     return StreamingResponse(recommendation_stream(), media_type="application/x-ndjson")
 
