@@ -15,7 +15,7 @@ async def lifespan(app: FastAPI):
     for on_event("startup") and on_event("shutdown").
     """
     connect_to_graph()
-    get_embedding_model()
+    # get_embedding_model()
     yield
     close_graph_connection()
 
