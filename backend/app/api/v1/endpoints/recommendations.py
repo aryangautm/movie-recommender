@@ -14,7 +14,7 @@ from app.crud import crud_movie, crud_cache, crud_recommendation
 from app.core.embedding_model import get_embedding_model
 
 router = APIRouter()
-model = get_embedding_model()
+# model = get_embedding_model()
 
 
 @router.post(
@@ -29,11 +29,12 @@ async def get_advanced_recommendations(
     driver: Driver = Depends(get_graph_driver),
 ):
     # Fetching and Validating the Source Movie
-    source_movie = await crud_movie.get_movie_by_id(db, request.source_movie_id)
+    source_movie_id = request.source_movie_id
+    source_movie = await crud_movie.get_movie_by_id(db, source_movie_id)
     if not source_movie:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Source movie with ID {request.source_movie_id} not found.",
+            detail=f"Source movie with ID {source_movie_id} not found.",
         )
 
     # Validating Selected Keywords
@@ -54,10 +55,10 @@ async def get_advanced_recommendations(
 
     keywords_str = "".join(sorted(request.selected_keywords))
     trigger_hash = hashlib.sha256(
-        f"{request.source_movie_id}:{keywords_str}".encode()
+        f"{source_movie_id}:{keywords_str}".encode()
     ).hexdigest()
     cache_key = f"llm_rec:{trigger_hash}"
-    print(f"{request.source_movie_id}:{keywords_str}")
+    print(f"{source_movie_id}:{keywords_str}")
 
     # Check Redis cache first (hot cache)
     cached_result = await crud_cache.get_cached_llm_recommendation(
@@ -66,6 +67,7 @@ async def get_advanced_recommendations(
 
     # If Redis cache not found, check database (warm cache)
     if not cached_result:
+        print("Cache miss in Redis, checking database...")
         cached_result = await crud_recommendation.get_recommendations_by_trigger_hash(
             db, trigger_hash
         )
@@ -79,30 +81,30 @@ async def get_advanced_recommendations(
     # If no cache generate recommendations using LLM
     async def recommendation_stream():
         from app.services import llm_client
-        from app.utils import llm_parser
-        import json
-        import time
 
-        start_time = time.time()
-        chunk_index = 0
         with SessionLocal() as sync_db:
-            for llm_chunk in llm_client.multi_turn_rec(
+            for parsed_chunk in llm_client.multi_turn_rec(
                 source_movie, request.selected_keywords
             ):
-                chunk_start = time.time()
-
-                parsed_chunk = llm_parser.parse_llm_recommendations(llm_chunk)
 
                 enriched_chunk = crud_movie.enrich_recommendations_with_db_data(
                     sync_db, parsed_chunk
                 )
 
-                chunk_elapsed = (time.time() - chunk_start) * 1000
-                total_elapsed = (time.time() - start_time) * 1000
-                print(
-                    f"[profiling] chunk {chunk_index} time={chunk_elapsed:.2f}ms total={total_elapsed:.2f}ms"
+                recs_to_save = [
+                    {
+                        "source_movie_id": source_movie_id,
+                        "trigger_keywords_hash": trigger_hash,
+                        "recommended_movie_id": rec["id"],
+                        "llm_justification": rec["justification"],
+                        "llm_score": rec["ai_score"],
+                    }
+                    for rec in enriched_chunk
+                ]
+
+                _ = crud_recommendation.bulk_create_llm_recommendations(
+                    sync_db, recs_to_save
                 )
-                chunk_index += 1
 
                 yield schemas.recommendation.RecResponse(
                     **{
@@ -110,9 +112,6 @@ async def get_advanced_recommendations(
                         "results": enriched_chunk,
                     }
                 ).model_dump_json() + "\n"
-
-        total_time = (time.time() - start_time) * 1000
-        print(f"[profiling] total_time={total_time:.2f}ms chunks={chunk_index}")
 
     return StreamingResponse(recommendation_stream(), media_type="application/x-ndjson")
 

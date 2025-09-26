@@ -32,7 +32,7 @@ def connect_to_graph():
         print("Successfully connected to Neo4j and verified connectivity.")
     except Exception as e:
         print(f"Failed to connect to Neo4j: {e}")
-        raise
+        pass
 
 
 def close_graph_connection():
