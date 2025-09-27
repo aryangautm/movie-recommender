@@ -294,6 +294,7 @@ def enrich_recommendations_with_db_data(
         A list of dictionaries matching the LLMRecommendationResult schema, ready for caching.
     """
     if not parsed_recs or not parsed_recs.get("movies"):
+        print("No parsed recommendations to enrich.")
         return []
 
     search_conditions = []
@@ -306,6 +307,7 @@ def enrich_recommendations_with_db_data(
             search_conditions.append(condition)
 
     if not search_conditions:
+        print("No valid search conditions could be constructed.")
         return []
 
     query = select(Movie).where(or_(*search_conditions))
@@ -359,7 +361,13 @@ def enrich_recommendations_with_db_data(
                 }
             )
 
-    print("done with enrichment")
+    print(
+        "Enrichment Done: ",
+        len(final_results),
+        "found,",
+        len(movies_to_process),
+        "to process.",
+    )
     if movies_to_process:
         crud_processing_queue.bulk_create_process(
             db, movies_to_process
