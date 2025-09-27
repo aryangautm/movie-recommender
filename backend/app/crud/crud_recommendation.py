@@ -92,7 +92,8 @@ async def get_recommendations_by_trigger_hash(
         )
         .join(Movie, LlmRecommendation.recommended_movie_id == Movie.id)
         .where(LlmRecommendation.trigger_keywords_hash == trigger_hash)
-        .order_by(LlmRecommendation.llm_score.desc())
+        .distinct(Movie.id)
+        .order_by(Movie.id, LlmRecommendation.llm_score.desc())
     )
 
     result = await db.execute(stmt)

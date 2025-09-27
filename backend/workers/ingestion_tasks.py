@@ -132,7 +132,7 @@ def ingest_recommended_movies():
                     )
 
             logger.info(f"Connecting to DB to ingest {len(movies_to_create)} movies.")
-            crud_movie.bulk_create_movies(db, movies_to_create)
+            crud_movie.bulk_upsert_movies(db, movies_to_create)
             logger.info(f"Successfully ingested {len(movies_to_create)} movies.")
 
             crud_processing_queue.bulk_patch_process(db, processes_to_update)

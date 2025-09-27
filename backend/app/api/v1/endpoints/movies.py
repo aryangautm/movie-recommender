@@ -1,6 +1,3 @@
-import json
-import httpx
-import asyncio
 from typing import List
 import redis.asyncio as redis
 from app.core.database import get_async_db, SessionLocal
@@ -11,14 +8,15 @@ from app.crud.crud_movie import (
     filter_existing_movie_ids,
 )
 from app.crud.crud_cache import get_cached_trending_movies, cache_trending_movies
-from app.schemas.movie import Movie, MovieSearchResult, SimilarMovie, TrendingMoviesPage
+from app.schemas.movie import Movie, MovieSearchResult, TrendingMoviesPage
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.tmdb_client import tmdb_client
 from app.utils.encryption import decrypt_id
 from workers.celery_config import celery_app
 from app.models.processing_queue import TriggerSource
-from app.crud import crud_processing_queue
+from app.crud import crud_processing_queue, crud_movie
+from app.services.llm_client import generate_keywords
 
 router = APIRouter()
 CACHE_TTL_SECONDS = 86400
@@ -67,9 +65,11 @@ async def get_trending_movies(
         # This DB call is synchronous but very fast (a single indexed query)
         new_movie_ids = await filter_existing_movie_ids(db, movie_ids)
         new_movies_to_process = []
+        new_movies = []
 
         for movie in trending_movies:
             if movie["id"] in new_movie_ids:
+                new_movies.append(movie)
                 new_movies_to_process.append(
                     {
                         "source_movie_id": movie["id"],
@@ -80,6 +80,7 @@ async def get_trending_movies(
                 )
 
         if new_movies_to_process:
+            crud_movie.bulk_create_movies(db, new_movies)
             print(
                 "New movies found, adding to processing queue...",
                 len(new_movies_to_process),
@@ -122,10 +123,23 @@ async def read_movie(movie_id: str, db: AsyncSession = Depends(get_async_db)):
     Get a single movie by its TMDb ID.
     """
     db_movie = await get_movie_by_id(db, movie_id=decrypt_id(movie_id))
+
     movie_data = db_movie.__dict__
+    db_movie.release_year
+
+    ai_keywords = []
+    if not db_movie.ai_keywords:
+        ai_keywords = generate_keywords(db_movie.title, db_movie.release_year)
+        await crud_movie.bulk_patch_movies(
+            db, [{"id": db_movie.id, "ai_keywords": ai_keywords}]
+        )
+    else:
+        ai_keywords = db_movie.ai_keywords
+
     movie_data["keywords"] = [
-        keyword.replace(".", "").capitalize() for keyword in db_movie.ai_keywords or []
+        keyword.replace(".", "").capitalize() for keyword in ai_keywords or []
     ]
+
     if movie_data is None:
         raise HTTPException(status_code=404, detail="Movie not found")
     return movie_data
