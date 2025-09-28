@@ -1,21 +1,56 @@
 import logging
-from tqdm import tqdm
-from typing import List, Dict, Any
-from app.core.database import SessionLocal
 from datetime import datetime
-from app.core.config import settings
-from app.crud import crud_movie, crud_processing_queue
-from app.models.processing_queue import TriggerSource, ProcessingStatus
-from app.models.movie import MovieVisibility
-from app.core.tmdb_client import tmdb_client
+from typing import Any, Dict, List
 
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.core.redis import sync_get_redis_client
+from app.core.tmdb_client import tmdb_client
+from app.crud import (crud_movie, crud_processing_queue, crud_recommendation,
+                      crud_vote)
+from app.models.movie import MovieVisibility
+from app.models.processing_queue import ProcessingStatus, TriggerSource
+from app.models.vote_log import VoteType
+from celery.signals import worker_shutdown
+from neo4j import Driver, GraphDatabase
+from tqdm import tqdm
+from workers.celery_config import celery_app
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from workers.celery_config import celery_app
+neo4j_driver: Driver = None
 
 
+def get_neo4j_driver():
+    global neo4j_driver
+    if neo4j_driver is None or neo4j_driver._closed:
+        try:
+            neo4j_driver = GraphDatabase.driver(
+                settings.NEO4J_URI,
+                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
+                keep_alive=True,
+                max_connection_lifetime=3600,
+            )
+            logger.info("Neo4j driver initialized for Celery worker.")
+        except Exception as e:
+            logger.error(f"Failed to initialize Neo4j driver for worker: {e}")
+            raise
+    return neo4j_driver
+
+
+DRIVER = get_neo4j_driver()
+
+
+@worker_shutdown.connect
+def shutdown_neo4j_driver():
+    global neo4j_driver
+    if neo4j_driver:
+        neo4j_driver.close()
+        logger.info("Neo4j driver for Celery worker shut down.")
+
+
+# Picks pending tasks from the processing queue table
 @celery_app.task(
     name="tasks.ingest_recommended_movies",
     autoretry_for=(Exception,),
@@ -143,3 +178,61 @@ def ingest_recommended_movies():
             db.rollback()
             logger.error(f"Database ingestion failed: {e}")
             raise
+
+
+@celery_app.task(
+    name="tasks.process_similarity_vote",
+    autoretry_for=(Exception,),
+    retry_kwargs={"max_retries": 3, "countdown": 5},
+    bind=True,
+)
+def process_similarity_vote(self, fingerprint: str, movie_id_1: int, movie_id_2: int):
+    """
+    The single source of truth for processing a similarity vote.
+    It recalculates and updates the effective_score on the graph edge.
+    """
+    logger.info(f"Processing similarity vote between {movie_id_1} and {movie_id_2}")
+    try:
+        with SessionLocal() as db:
+            if rec_ids := crud_recommendation.get_recommendations(
+                db, movie_id_1, movie_id_2
+            ):
+                for rec_id in rec_ids:
+                    crud_recommendation.increment_recommendation_vote(db, rec_id)
+
+        crud_vote.log_vote(
+            db,
+            fingerprint=fingerprint,
+            source_movie_id=movie_id_1,
+            target_movie_id=movie_id_2,
+            vote_type=VoteType.DIRECT_LINK,
+        )
+
+        with sync_get_redis_client() as redis_client:
+            crud_vote.record_user_vote(
+                redis_client, fingerprint, movie_id_1, movie_id_2
+            )
+
+        try:
+            global DRIVER
+            if not DRIVER or DRIVER._closed:
+                DRIVER = get_neo4j_driver()
+
+            success = crud_vote.process_similarity_vote_in_graph(
+                DRIVER, movie_id_1, movie_id_2
+            )
+
+            (
+                logger.info("Successfully processed vote in graph database.")
+                if success
+                else logger.warning("Failed to process vote in graph database.")
+            )
+
+        except:
+            ...
+
+    except Exception as e:
+        logger.error(
+            f"Task failed for vote between ({movie_id_1}, {movie_id_2}). Error: {e}"
+        )
+        raise self.retry(exc=e)
