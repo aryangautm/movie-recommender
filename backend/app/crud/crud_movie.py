@@ -1,23 +1,23 @@
-from typing import Any, Dict, List, Set, Callable
-from sqlalchemy import select, or_, and_, text, case
-import uuid
 import json
-from neo4j import Driver
-from sqlalchemy import insert, func
-from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
+import random
+import time
+import uuid
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Set
 
-from ..models.movie import Movie, MovieVisibility
+from app.crud import crud_processing_queue
 from app.models.processing_queue import ProcessingQueue, TriggerSource
 from app.schemas.movie import MovieSearchResult
 from app.schemas.recommendation import LLMRecResult
+from neo4j import Driver
+from sqlalchemy import and_, case, func, insert, or_, select, text
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
 from sqlalchemy.orm import Session
-from datetime import datetime
-import time
-from app.crud import crud_processing_queue
-import random
 from workers.celery_config import celery_app
+
+from ..models.movie import Movie, MovieVisibility
 
 
 def chunker(seq, size):
@@ -278,7 +278,7 @@ chars_to_remove = "·'.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
 translation_table = str.maketrans("", "", chars_to_remove)
 
 
-def enrich_recommendations_with_db_data(
+def enrich_recommendations(
     db: Session, parsed_recs: Dict[str, List[Dict[str, Any]]]
 ) -> Dict[str, Any]:
     """
@@ -391,7 +391,7 @@ def enrich_recommendations_with_db_data(
     return final_results
 
 
-async def get_fallback_recommendations(
+async def get_graph_recs(
     db: AsyncSession, driver: Driver, source_movie_id: int
 ) -> List[Dict[str, Any]]:
 
@@ -483,29 +483,6 @@ async def vector_search(db: AsyncSession, id: str, query_embedding: str) -> List
     return final_results
 
 
-def create_query_description(title, overview, genres, ai_keywords, selected_keywords):
-    description_parts = []
-
-    filtered_overview = (
-        filter_overview_by_keywords(overview, selected_keywords)
-        or "a story involving intriguing elements"
-    )
-    emphasized_selected = ", ".join(selected_keywords * 2)
-
-    description_parts.append(
-        f"Recommend movies emphasizing these specific themes and narratives: {emphasized_selected}."
-    )
-    # description_parts.append(f"Similar to plots involving: {filtered_overview}.")
-    description_parts.append(f"In genres like {', '.join(genres[:2]).lower()}.")
-
-    if ai_keywords:
-        description_parts.append(
-            f"With additional elements such as {', '.join(ai_keywords[:3])}."
-        )
-
-    return " ".join(description_parts)
-
-
 def update_additional_keywords(db: Session, data: List[Dict[str, Any]]) -> None:
 
     if data:
@@ -528,16 +505,3 @@ def update_additional_keywords(db: Session, data: List[Dict[str, Any]]) -> None:
         db.commit()
 
     db.close()
-
-
-import re
-
-
-def filter_overview_by_keywords(overview, selected_keywords):
-    if not overview:
-        return ""
-    sentences = re.split(r"(?<!\w\.\w.)(?<![A-Z][a-z]\.)(?<=\.|\?)\s", overview.strip())
-    filtered_sentences = [
-        s for s in sentences if any(kw.lower() in s.lower() for kw in selected_keywords)
-    ]
-    return " ".join(filtered_sentences[:2])

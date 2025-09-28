@@ -1,11 +1,12 @@
 import hashlib
-from fastapi import APIRouter, Depends, status, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi.responses import StreamingResponse
-from app.services import llm_client
+
 from app import schemas
-from app.core.database import get_async_db, SessionLocal
+from app.core.database import SessionLocal, get_async_db
 from app.crud import crud_movie, crud_recommendation
+from app.services import llm_client
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 
@@ -71,7 +72,7 @@ async def get_advanced_recommendations(
             ):
                 print("Parsed Chunk:", parsed_chunk)
 
-                enriched_chunk = crud_movie.enrich_recommendations_with_db_data(
+                enriched_chunk = crud_movie.enrich_recommendations(
                     sync_db, parsed_chunk
                 )
 
