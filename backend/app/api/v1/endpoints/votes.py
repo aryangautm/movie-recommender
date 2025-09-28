@@ -30,14 +30,15 @@ async def create_or_vote_on_link(
             status_code=429, detail="You have already voted for this link recently."
         )
 
+    if await crud_vote.is_limit_exceeded(redis_client, vote.fingerprint):
+        raise HTTPException(
+            status_code=429, detail="You have exceeded your daily voting limit."
+        )
+
     celery_app.send_task(
         "tasks.process_similarity_vote",
-        args=[vote.movie_id_1, vote.movie_id_2],
-        queue="llm_queue",
-    )
-
-    await crud_vote.record_user_vote(
-        redis_client, vote.fingerprint, vote.movie_id_1, vote.movie_id_2
+        args=[vote.fingerprint, vote.movie_id_1, vote.movie_id_2],
+        queue="ingestion_queue",
     )
 
     return {"message": "Your vote has been accepted and is being processed."}

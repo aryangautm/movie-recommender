@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import redis.asyncio as redis
+import redis as sync_redis
 from neo4j import Driver
 from app.models.vote_log import VoteLog, VoteType
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,25 @@ def _get_redis_key(fingerprint: str, movie_id_1: int, movie_id_2: int) -> str:
     return f"vote:{fingerprint}:{id1}:{id2}"
 
 
+def _get_daily_count_key(fingerprint_id: str) -> str:
+    """Creates a Redis key for the daily vote counter."""
+    return f"vote_count:daily:{fingerprint_id}"
+
+
+async def is_limit_exceeded(redis_client: redis.Redis, fingerprint: str) -> int:
+    """
+    Checks if the user has exceeded their daily voting limit.
+    Returns True if the limit is exceeded, False otherwise.
+    """
+    key = _get_daily_count_key(fingerprint)
+    count = await redis_client.get(key)
+
+    if count:
+        return int(count) > settings.MAX_VOTES_PER_DAY
+
+    return False
+
+
 async def can_user_vote(
     redis_client: redis.Redis, fingerprint: str, movie_id_1: int, movie_id_2: int
 ) -> bool:
@@ -25,11 +45,19 @@ async def can_user_vote(
     return await redis_client.get(key) is None
 
 
-async def record_user_vote(
-    redis_client: redis.Redis, fingerprint: str, movie_id_1: int, movie_id_2: int
+def record_user_vote(
+    redis_client: sync_redis.Redis, fingerprint: str, movie_id_1: int, movie_id_2: int
 ):
     key = _get_redis_key(fingerprint, movie_id_1, movie_id_2)
-    await redis_client.set(key, "voted", ex=VOTE_COOLDOWN_SECONDS)
+    redis_client.set(key, "voted", ex=VOTE_COOLDOWN_SECONDS)
+
+    # Increment the daily vote count
+    key = _get_daily_count_key(fingerprint)
+    # Use a pipeline for an atomic transaction
+    pipe = redis_client.pipeline()
+    pipe.incr(key)
+    pipe.expire(key, 86400, nx=True)  # Set a 24h expiry only if the key is new
+    pipe.execute()
 
 
 def process_similarity_vote_in_graph(
@@ -98,28 +126,3 @@ async def log_vote(
     )
     db.add(log_entry)
     await db.commit()
-
-
-def _get_daily_count_key(fingerprint_id: str) -> str:
-    """Creates a Redis key for the daily vote counter."""
-    return f"vote_count:daily:{fingerprint_id}"
-
-
-async def check_and_increment_daily_vote_count(
-    redis_client: redis.Redis, fingerprint_id: str
-) -> bool:
-    """
-    Atomically increments the daily vote counter for a fingerprint and checks if
-    it has exceeded the limit. Returns True if the vote is allowed, False otherwise.
-    """
-    key = _get_daily_count_key(fingerprint_id)
-
-    # Use a pipeline for an atomic transaction
-    pipe = redis_client.pipeline()
-    pipe.incr(key)
-    pipe.expire(key, 86400, nx=True)  # Set a 24h expiry only if the key is new
-    results = await pipe.execute()
-
-    current_count = results[0]
-
-    return current_count <= settings.MAX_VOTES_PER_DAY
