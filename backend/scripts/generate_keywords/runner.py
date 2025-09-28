@@ -1,8 +1,9 @@
+import argparse
+import logging
+
 from .batch_processing import create_keyword_generation_batch_jobs
 from .monitor_jobs import monitor_all_batch_jobs
 from .save_keywords import process_results_and_update_db
-import logging
-import argparse
 
 logging.basicConfig(level=logging.INFO)
 

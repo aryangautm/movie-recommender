@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, Float, JSON
 from app.core.database import Base
+from sqlalchemy import JSON, Column, Float, ForeignKey, Integer, String
 
 
 class LlmRecommendation(Base):

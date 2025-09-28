@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from .endpoints import movies, votes, recommendations
+from .endpoints import movies, recommendations, votes
 
 api_router = APIRouter()
 

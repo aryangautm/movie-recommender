@@ -1,9 +1,10 @@
-from sentence_transformers import SentenceTransformer
-from app.core.database import SessionLocal
-from app.models.movie import Movie, MovieVisibility
-from app.crud import crud_movie
 from datetime import datetime
-from typing import List, Dict
+from typing import Dict, List
+
+from app.core.database import SessionLocal
+from app.crud import crud_movie
+from app.models.movie import Movie, MovieVisibility
+from sentence_transformers import SentenceTransformer
 
 
 def get_movies():

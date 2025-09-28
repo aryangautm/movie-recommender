@@ -1,16 +1,17 @@
+import math
 import os
 import sys
-import math
+
 import numpy as np
-from tqdm import tqdm
+from app.core.config import settings
+from app.core.database import SessionLocal, get_db
+from app.models.movie import Movie
+from app.utils.scoring import calculate_effective_score
 from neo4j import Driver, GraphDatabase, exceptions
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import pairwise_distances
 from sklearn.preprocessing import MultiLabelBinarizer
-from app.utils.scoring import calculate_effective_score
-from app.core.config import settings
-from app.core.database import SessionLocal, get_db
-from app.models.movie import Movie
+from tqdm import tqdm
 
 # --- Model & Seeding Configuration ---
 MODEL_NAME = "all-MiniLM-L6-v2"  # A fast and effective model for semantic search

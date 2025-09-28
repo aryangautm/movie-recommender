@@ -1,9 +1,9 @@
+import app.schemas as schemas
 import redis.asyncio as redis
-from workers.celery_config import celery_app
 from app.core.redis import get_redis_client
 from app.crud import crud_vote
-import app.schemas as schemas
 from fastapi import APIRouter, Depends, HTTPException, status
+from workers.celery_config import celery_app
 
 router = APIRouter()
 

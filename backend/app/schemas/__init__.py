@@ -1,3 +1,3 @@
-from . import movie, vote, recommendation
+from . import movie, recommendation, vote
 
 __all__ = ["movie", "vote", "recommendation"]

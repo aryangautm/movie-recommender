@@ -1,7 +1,8 @@
 import json
-import redis.asyncio as redis
+from typing import Any, Dict, List, Optional
+
 import redis as sync_redis
-from typing import Dict, Any, Optional, List
+import redis.asyncio as redis
 
 TRENDING_CACHE_TTL_SECONDS = 86400  # Cache trending movies for 24 hours
 LLM_REC_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7

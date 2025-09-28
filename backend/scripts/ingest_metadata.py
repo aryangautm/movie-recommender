@@ -1,13 +1,15 @@
+import asyncio
+import json
 import os
 import sys
-import json
-import asyncio
+from typing import Any, Dict, List, Set
+
 import httpx
 from tqdm import tqdm
-from typing import List, Dict, Any, Set
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from datetime import datetime
+
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.crud import crud_movie

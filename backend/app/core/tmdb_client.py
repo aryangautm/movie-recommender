@@ -1,8 +1,8 @@
+from typing import Any, Dict, Optional
+
 import httpx
-from typing import Optional, Dict, Any
-from functools import lru_cache
+
 from .config import settings
-import requests
 
 # Constants
 TMDB_API_URL = "https://api.themoviedb.org/3"
