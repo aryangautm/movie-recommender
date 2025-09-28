@@ -1,96 +1,16 @@
 import logging
-from celery.signals import worker_shutdown
-from neo4j import Driver, GraphDatabase
-from typing import List, Dict, Any
+from typing import List
+
 from app.core.database import SessionLocal
-from datetime import datetime
-from app.core.config import settings
-from app.crud import crud_vote, crud_movie, crud_cache, crud_recommendation
-from app.core.tmdb_client import tmdb_client
-from app.services import llm_client
 from app.core.redis import sync_get_redis_client
+from app.crud import crud_cache, crud_movie, crud_recommendation
+from app.services import llm_client
 from app.utils import llm_parser
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 from workers.celery_config import celery_app
-
-
-neo4j_driver: Driver = None
-
-
-def get_neo4j_driver():
-    global neo4j_driver
-    if neo4j_driver is None or neo4j_driver._closed:
-        try:
-            neo4j_driver = GraphDatabase.driver(
-                settings.NEO4J_URI,
-                auth=(settings.NEO4J_USER, settings.NEO4J_PASSWORD),
-                keep_alive=True,
-                max_connection_lifetime=3600,
-            )
-            logger.info("Neo4j driver initialized for Celery worker.")
-        except Exception as e:
-            logger.error(f"Failed to initialize Neo4j driver for worker: {e}")
-            raise
-    return neo4j_driver
-
-
-DRIVER = get_neo4j_driver()
-
-
-@worker_shutdown.connect
-def shutdown_neo4j_driver(**kwargs):
-    global neo4j_driver
-    if neo4j_driver:
-        neo4j_driver.close()
-        logger.info("Neo4j driver for Celery worker shut down.")
-
-
-@celery_app.task(
-    name="tasks.process_similarity_vote",
-    autoretry_for=(Exception,),
-    retry_kwargs={"max_retries": 3, "countdown": 5},
-    bind=True,
-)
-def process_similarity_vote(self, movie_id_1: int, movie_id_2: int):
-    """
-    The single source of truth for processing a similarity vote.
-    It recalculates and updates the effective_score on the graph edge.
-    """
-    logger.info(f"Processing similarity vote between {movie_id_1} and {movie_id_2}")
-    try:
-        global DRIVER
-        if not DRIVER or DRIVER._closed:
-            DRIVER = get_neo4j_driver()
-
-        try:
-            with SessionLocal() as db:
-                if rec_id := crud_recommendation.is_recommendation(
-                    db, movie_id_1, movie_id_2
-                ):
-                    crud_recommendation.increment_recommendation_vote(db, rec_id)
-        except Exception as e:
-            logger.error(
-                f"Failed to increment recommendation vote for {movie_id_1}, {movie_id_2}: {e}"
-            )
-            pass
-
-        success = crud_vote.process_similarity_vote_in_graph(
-            DRIVER, movie_id_1, movie_id_2
-        )
-
-        if success:
-            logger.info("Successfully processed vote and updated effective_score.")
-        else:
-            logger.warning("Vote processing failed for an unknown reason.")
-
-    except Exception as e:
-        logger.error(
-            f"Task failed for vote between ({movie_id_1}, {movie_id_2}). Error: {e}"
-        )
-        raise self.retry(exc=e)
 
 
 @celery_app.task(
