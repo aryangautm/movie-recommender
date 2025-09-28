@@ -1,10 +1,12 @@
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import Any, Dict, List, Optional, Tuple
+
+from app.models.movie import Movie
+from app.utils.scoring import calculate_effective_score
 from sqlalchemy import select, update
-from typing import List, Dict, Any, Optional, Tuple
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from ..models.recommendation import LlmRecommendation
-from app.models.movie import Movie
-from sqlalchemy.orm import Session
 
 
 def bulk_create_llm_recommendations(
@@ -29,16 +31,16 @@ def bulk_create_llm_recommendations(
     return recommendations_data
 
 
-def is_recommendation(db: Session, movie_id_1: int, movie_id_2: int) -> bool:
+def get_recommendations(db: Session, movie_id_1: int, movie_id_2: int) -> List[int]:
     if movie_id_1 == movie_id_2:
-        return None
+        return []
 
-    stmt = select(LlmRecommendation).where(
+    stmt = select(LlmRecommendation.id).where(
         (LlmRecommendation.source_movie_id == movie_id_1)
         & (LlmRecommendation.recommended_movie_id == movie_id_2)
     )
     result = db.execute(stmt)
-    return result.scalar_one_or_none()
+    return result.scalars().all()
 
 
 async def get_recommendation_by_id(
@@ -85,6 +87,7 @@ async def get_recommendations_by_trigger_hash(
             LlmRecommendation.id.label("recommendation_id"),
             LlmRecommendation.llm_justification,
             LlmRecommendation.llm_score,
+            LlmRecommendation.user_votes,
             Movie.id,
             Movie.title,
             Movie.release_year,
@@ -106,9 +109,13 @@ async def get_recommendations_by_trigger_hash(
             "release_year": row.release_year,
             "poster_path": row.poster_path,
             "justification": row.llm_justification,
-            "score": row.llm_score,
+            "score": calculate_effective_score(
+                user_votes=row.user_votes, ai_score=row.llm_score, similarity_score=None
+            ),
             "recommendation_id": row.recommendation_id,
         }
         for row in rows
     ]
+
+    recommendations.sort(key=lambda x: x["score"], reverse=True)
     return recommendations
