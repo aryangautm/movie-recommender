@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, field_serializer, field_validator
 from typing import List, Literal, Optional
-from app.utils.encryption import encrypt_id, decrypt_id
+
+from app.utils.encryption import decrypt_id, encrypt_id
+from pydantic import BaseModel, Field, field_serializer, field_validator
 
 
 class RecRequest(BaseModel):

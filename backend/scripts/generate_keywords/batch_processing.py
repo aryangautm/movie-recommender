@@ -1,16 +1,15 @@
 import json
-from pathlib import Path
 import logging
 import math
-
-from google import genai
-from google.genai import types
-
-from sqlalchemy import select
-from app.core.config import settings
 from datetime import datetime
+from pathlib import Path
+
+from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.movie import Movie
+from google import genai
+from google.genai import types
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 logging.basicConfig(

@@ -1,9 +1,10 @@
-import time
-import logging
 import csv
+import logging
+import time
 from pathlib import Path
-from google import genai
+
 from app.core.config import settings
+from google import genai
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"

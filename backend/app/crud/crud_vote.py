@@ -1,11 +1,11 @@
 from typing import Tuple
 
-import redis.asyncio as redis
 import redis as sync_redis
-from neo4j import Driver
-from app.models.vote_log import VoteLog, VoteType
-from sqlalchemy.ext.asyncio import AsyncSession
+import redis.asyncio as redis
 from app.core.config import settings
+from app.models.vote_log import VoteLog, VoteType
+from neo4j import Driver
+from sqlalchemy.ext.asyncio import AsyncSession
 
 VOTE_COOLDOWN_SECONDS = 90 * 24 * 60 * 60
 

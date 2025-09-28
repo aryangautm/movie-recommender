@@ -1,6 +1,6 @@
 from .movie import Movie
-from .vote_log import VoteLog
-from .recommendation import LlmRecommendation
 from .processing_queue import ProcessingQueue
+from .recommendation import LlmRecommendation
+from .vote_log import VoteLog
 
 __all__ = ["Movie", "VoteLog", "LlmRecommendation", "ProcessingQueue"]

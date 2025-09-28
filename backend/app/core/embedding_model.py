@@ -1,6 +1,6 @@
 from functools import lru_cache
-from sentence_transformers import SentenceTransformer
 
+from sentence_transformers import SentenceTransformer
 
 EMBEDDING_MODEL_NAME = "all-mpnet-base-v2"
 

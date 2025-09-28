@@ -1,8 +1,9 @@
-import redis.asyncio as redis
+from contextlib import contextmanager
+
 import redis as sync_redis
+import redis.asyncio as redis
 
 from .config import settings
-from contextlib import contextmanager
 
 redis_pool = redis.ConnectionPool.from_url(settings.REDIS_URL, decode_responses=True)
 sync_redis_pool = sync_redis.ConnectionPool.from_url(

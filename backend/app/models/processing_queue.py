@@ -1,10 +1,10 @@
 import datetime
-from app.core.database import Base
-from sqlalchemy import Column, Integer, String, Text, DateTime
-from sqlalchemy.dialects.postgresql import JSONB
-from zoneinfo import ZoneInfo
 import enum
-from sqlalchemy import Enum
+from zoneinfo import ZoneInfo
+
+from app.core.database import Base
+from sqlalchemy import Column, DateTime, Enum, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 
 
 class TriggerSource(str, enum.Enum):

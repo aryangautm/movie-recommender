@@ -1,8 +1,8 @@
-from typing import List, Optional, Any
-
-from pydantic import BaseModel, Field, field_serializer
 from datetime import date
+from typing import Any, List, Optional
+
 from app.utils.encryption import encrypt_id
+from pydantic import BaseModel, Field, field_serializer
 
 
 class Genre(BaseModel):

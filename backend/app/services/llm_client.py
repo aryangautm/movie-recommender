@@ -1,12 +1,14 @@
-from typing import List, Dict, Any
-from app.core.config import settings
-from pydantic import BaseModel, Field
+import time
 from pathlib import Path
+from typing import Any, Dict, List
+
+from app.core.config import settings
+from app.utils import llm_parser
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
+
 from .prompt import ai_keywords_prompt, multi_turn_rec_prompt
-import time
-from app.utils import llm_parser
 
 PROMPT_FILE = Path(__file__).parent / "rec_prompt.txt"
 
