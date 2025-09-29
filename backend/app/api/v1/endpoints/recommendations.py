@@ -87,9 +87,12 @@ async def get_advanced_recommendations(
                     for rec in enriched_chunk
                 ]
 
-                _ = crud_recommendation.bulk_create_llm_recommendations(
+                new_recs = crud_recommendation.bulk_create_llm_recommendations(
                     sync_db, recs_to_save
                 )
+
+                for rec_obj, rec_data in zip(new_recs, enriched_chunk):
+                    rec_data["rec_id"] = rec_obj.id
 
                 yield schemas.recommendation.RecResponse(
                     **{

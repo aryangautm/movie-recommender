@@ -34,6 +34,9 @@ class BaseRecResult(BaseModel):
     justification: Optional[List[str]] = Field(
         default_factory=list, description="Keywords that matched the source movie."
     )
+    rec_id: int = Field(
+        ..., description="The ID of the recommendation in LlmRecommendation table."
+    )
 
     @field_serializer("id")
     def serialize_id(self, id: int) -> str:
