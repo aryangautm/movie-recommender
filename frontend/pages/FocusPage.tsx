@@ -4,6 +4,7 @@ import { Movie, Suggestion, useHeader } from '@/App';
 import { SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
 import KeywordSelector from '@/components/KeywordSelector';
+import HeaderSearchBox from '@/components/HeaderSearchBox';
 
 const BACKEND_BASE_URL = 'http://localhost:8000';
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
@@ -36,13 +37,7 @@ const FocusPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (isScrolled && movie) {
-      setCenterContent(
-        <div className="text-2xl font-semibold truncate">{movie.title} ({movie.year})</div>
-      );
-    } else {
-      setCenterContent(<div />);
-    }
+    setCenterContent(<HeaderSearchBox />);
 
     return () => {
       setCenterContent(null);

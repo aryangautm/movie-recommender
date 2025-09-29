@@ -79,14 +79,13 @@ const SearchPage: React.FC = () => {
         className={`
           w-full flex flex-col items-center 
           transition-all duration-500 ease-in-out
-          ${
-            isSearchActive
-              // When active, position from the top with a fixed margin and apply the desired upward translate.
-              // This anchors the content, so it won't move when SearchResults' height changes.
-              ? 'mt-[25vh] -translate-y-16'
-              // When inactive, use this trick to vertically center the block without flexbox `justify-center`.
-              // It centers the block based on its own height.
-              : 'mt-[50vh] -translate-y-1/2'
+          ${isSearchActive
+            // When active, position from the top with a fixed margin and apply the desired upward translate.
+            // This anchors the content, so it won't move when SearchResults' height changes.
+            ? 'mt-[25vh] -translate-y-16'
+            // When inactive, use this trick to vertically center the block without flexbox `justify-center`.
+            // It centers the block based on its own height.
+            : 'mt-[50vh] -translate-y-1/2'
           }
         `}
       >
@@ -108,6 +107,7 @@ const SearchPage: React.FC = () => {
           isLoading={isLoading}
           show={isSearchActive}
           onSelectMovie={handleSelectMovie}
+          backgroundColor="bg-[#7D1AED]/10"
         />
       </div>
     </div>
