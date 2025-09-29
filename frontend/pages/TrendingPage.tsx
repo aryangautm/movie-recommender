@@ -6,7 +6,7 @@ import { TrendingIcon, SpinnerIcon } from '../components/icons';
 import TrendingCard from '../components/TrendingCard';
 import { Movie } from '../App';
 
-const BACKEND_BASE_URL = 'http://localhost:8000';
+import { API_URL } from '../api/config';
 
 const formatMovieData = (item: any): Movie => ({
     id: item.id,
@@ -37,7 +37,7 @@ const TrendingPage: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/trending?page=${pageNum}`, {
+            const response = await fetch(`${API_URL}/api/v1/movies/trending?page=${pageNum}`, {
                 signal
             });
             if (!response.ok) {

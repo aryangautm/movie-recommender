@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { SearchIcon } from './icons';
 import SearchResults from './SearchResults';
 import { Movie } from '../App';
-
-const BACKEND_BASE_URL = 'http://localhost:8000';
+import { API_URL } from '../api/config';
 
 interface HeaderSearchBoxProps {
     placeholder?: string;
@@ -127,7 +126,7 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
         const fetchSearchResults = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
+                const response = await fetch(`${API_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }

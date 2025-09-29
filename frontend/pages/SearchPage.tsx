@@ -4,7 +4,7 @@ import ClippingForm from '../components/ClippingForm';
 import SearchResults from '../components/SearchResults';
 import { Movie } from '../App';
 
-const BACKEND_BASE_URL = 'http://localhost:8000';
+import { API_URL } from '../api/config';
 
 const SearchPage: React.FC = () => {
   const navigate = useNavigate();
@@ -35,7 +35,7 @@ const SearchPage: React.FC = () => {
     const fetchSearchResults = async () => {
       setIsLoading(true);
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
+        const response = await fetch(`${API_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
