@@ -1,12 +1,13 @@
 import hashlib
 
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app import schemas
 from app.core.database import SessionLocal, get_async_db
 from app.crud import crud_movie, crud_recommendation
 from app.services import llm_client
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import StreamingResponse
-from sqlalchemy.ext.asyncio import AsyncSession
 
 router = APIRouter()
 

@@ -1,8 +1,9 @@
 import enum
 
-from app.core.database import Base
 from sqlalchemy import Column, DateTime, Enum, ForeignKey, Integer, String
 from sqlalchemy.sql import func
+
+from app.core.database import Base
 
 
 class VoteType(enum.Enum):

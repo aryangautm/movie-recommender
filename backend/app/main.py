@@ -1,11 +1,11 @@
 from contextlib import asynccontextmanager
 
-from app.api.v1.routes import api_router
-from app.core.config import settings
-
-from app.core.graph import close_graph_connection, connect_to_graph
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from app.api.v1.routes import api_router
+from app.core.config import settings
+from app.core.graph import close_graph_connection, connect_to_graph
 
 
 @asynccontextmanager

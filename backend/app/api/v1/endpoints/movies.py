@@ -1,20 +1,23 @@
 from typing import List
 
 import redis.asyncio as redis
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.database import SessionLocal, get_async_db
 from app.core.redis import get_redis_client
 from app.core.tmdb_client import tmdb_client
 from app.crud import crud_movie, crud_processing_queue
-from app.crud.crud_cache import (cache_trending_movies,
-                                 get_cached_trending_movies)
-from app.crud.crud_movie import (filter_existing_movie_ids, get_movie_by_id,
-                                 search_movies_by_title)
+from app.crud.crud_cache import cache_trending_movies, get_cached_trending_movies
+from app.crud.crud_movie import (
+    filter_existing_movie_ids,
+    get_movie_by_id,
+    search_movies_by_title,
+)
 from app.models.processing_queue import TriggerSource
 from app.schemas.movie import Movie, MovieSearchResult, TrendingMoviesPage
 from app.services.llm_client import generate_keywords
 from app.utils.encryption import decrypt_id
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from workers.celery_config import celery_app
 
 router = APIRouter()
@@ -49,7 +52,7 @@ async def get_trending_movies(
         )
     for movie in trending_data.get("results", []):
         movie["genres"] = [
-            {"id": gid, "name": genre_map.get(gid, "Unknown")}
+            {"id": gid, "name": genre_map.get(str(gid), "Unknown")}
             for gid in movie.get("genre_ids", [])
         ]
 
@@ -79,12 +82,11 @@ async def get_trending_movies(
                 )
 
         if new_movies_to_process:
-            crud_movie.bulk_create_movies(db, new_movies)
-            print(
-                "New movies found, adding to processing queue...",
-                len(new_movies_to_process),
-            )
             with SessionLocal() as sync_db:
+                crud_movie.bulk_create_movies(sync_db, new_movies)
+                print(
+                    f"{len(new_movies_to_process)} new movies found, adding to processing queue..."
+                )
                 crud_processing_queue.bulk_create_process(
                     sync_db, new_movies_to_process
                 )

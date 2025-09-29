@@ -5,16 +5,17 @@ import uuid
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Set
 
-from app.crud import crud_processing_queue
-from app.models.processing_queue import ProcessingQueue, TriggerSource
-from app.schemas.movie import MovieSearchResult
-from app.schemas.recommendation import LLMRecResult
 from neo4j import Driver
 from sqlalchemy import and_, case, func, insert, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.orm import Session
+
+from app.crud import crud_processing_queue
+from app.models.processing_queue import ProcessingQueue, TriggerSource
+from app.schemas.movie import MovieSearchResult
+from app.schemas.recommendation import LLMRecResult
 from workers.celery_config import celery_app
 
 from ..models.movie import Movie, MovieVisibility
@@ -37,8 +38,19 @@ def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
 
     for i, movie_batch in enumerate(chunker(movies, BATCH_SIZE)):
         print(f"Creating movies: Batch {i+1} with {len(movie_batch)} movies")
+
+        # Filter out unconsumed columns that don't exist in the Movie model
+        filtered_batch = []
+        for movie in movie_batch:
+            filtered_movie = {
+                k: v
+                for k, v in movie.items()
+                if k not in ["adult", "video", "media_type", "genre_ids", "popularity"]
+            }
+            filtered_batch.append(filtered_movie)
+
         try:
-            stmt = insert(Movie.__table__).values(movie_batch)
+            stmt = insert(Movie.__table__).values(filtered_batch)
             stmt = stmt.on_conflict_do_nothing(index_elements=["id"])
             db.execute(stmt)
             db.commit()
@@ -50,7 +62,7 @@ def bulk_create_movies(db: Session, movies: List[Dict[str, Any]]):
             raise
 
 
-async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
+def bulk_upsert_movies(db: Session, movies: List[Dict[str, Any]]):
     """
     Performs a bulk "upsert" (insert or update) of movies into the database.
     If a movie with the same ID already exists, it will be updated.
@@ -72,12 +84,12 @@ async def bulk_upsert_movies(db: AsyncSession, movies: List[Dict[str, Any]]):
                 index_elements=["id"], set_=update_dict
             )
 
-            await db.execute(upsert_stmt)
-            await db.commit()
+            db.execute(upsert_stmt)
+            db.commit()
         except Exception as e:
             with open("error_log.txt", "a") as error_file:
                 error_file.write(f"Error during bulk upsert: {e}\n")
-            await db.rollback()
+            db.rollback()
 
 
 async def bulk_patch_movies(db: AsyncSession, movies_data: List[Dict[str, Any]]):
