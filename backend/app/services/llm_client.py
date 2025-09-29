@@ -2,11 +2,11 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
-from app.core.config import settings
-from app.utils import llm_parser
 from google import genai
 from google.genai import types
-from pydantic import BaseModel, Field
+
+from app.core.config import settings
+from app.utils import llm_parser
 
 from .prompt import ai_keywords_prompt, multi_turn_rec_prompt
 

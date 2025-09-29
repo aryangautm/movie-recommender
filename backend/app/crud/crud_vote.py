@@ -2,10 +2,11 @@ from typing import Tuple
 
 import redis as sync_redis
 import redis.asyncio as redis
+from neo4j import Driver
+from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.models.vote_log import VoteLog, VoteType
-from neo4j import Driver
-from sqlalchemy.ext.asyncio import AsyncSession
 
 VOTE_COOLDOWN_SECONDS = 90 * 24 * 60 * 60
 
@@ -108,9 +109,9 @@ def process_similarity_vote_in_graph(
         return True
 
 
-async def log_vote(
-    db: AsyncSession,
-    fingerprint_id: str,
+def log_vote(
+    db: Session,
+    fingerprint: str,
     source_movie_id: int,
     target_movie_id: int,
     vote_type: VoteType,
@@ -118,11 +119,11 @@ async def log_vote(
 ):
     """Logs a vote to the persistent audit trail in PostgreSQL."""
     log_entry = VoteLog(
-        fingerprint_id=fingerprint_id,
+        fingerprint_id=fingerprint,
         source_movie_id=source_movie_id,
         target_movie_id=target_movie_id,
         vote_type=vote_type,
         reference_id=reference_id,
     )
     db.add(log_entry)
-    await db.commit()
+    db.commit()

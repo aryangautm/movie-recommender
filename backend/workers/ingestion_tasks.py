@@ -6,8 +6,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.redis import sync_get_redis_client
 from app.core.tmdb_client import tmdb_client
-from app.crud import (crud_movie, crud_processing_queue, crud_recommendation,
-                      crud_vote)
+from app.crud import crud_movie, crud_processing_queue, crud_recommendation, crud_vote
 from app.models.movie import MovieVisibility
 from app.models.processing_queue import ProcessingStatus, TriggerSource
 from app.models.vote_log import VoteType
@@ -43,7 +42,7 @@ DRIVER = get_neo4j_driver()
 
 
 @worker_shutdown.connect
-def shutdown_neo4j_driver():
+def shutdown_neo4j_driver(**kwargs):  # It needs to accept kwargs
     global neo4j_driver
     if neo4j_driver:
         neo4j_driver.close()
@@ -104,13 +103,17 @@ def ingest_recommended_movies():
                         {
                             "id": movie.id,
                             "status": ProcessingStatus.FAILED,
-                            "failure_reason": "NOT_FOUND",
+                            "failure_reason": (
+                                "NOT_FOUND"
+                                if not movie.source_movie_id
+                                else "API_ERROR"
+                            ),
                         }
                     )
                     continue
 
                 genres = [
-                    {"id": gid, "name": genre_map.get(gid, "Unknown")}
+                    {"id": gid, "name": genre_map.get(str(gid), "Unknown")}
                     for gid in movie_data.get("genre_ids", [])
                 ]
 
@@ -200,18 +203,23 @@ def process_similarity_vote(self, fingerprint: str, movie_id_1: int, movie_id_2:
                 for rec_id in rec_ids:
                     crud_recommendation.increment_recommendation_vote(db, rec_id)
 
-        crud_vote.log_vote(
-            db,
-            fingerprint=fingerprint,
-            source_movie_id=movie_id_1,
-            target_movie_id=movie_id_2,
-            vote_type=VoteType.DIRECT_LINK,
-        )
+                crud_vote.log_vote(
+                    db,
+                    fingerprint=fingerprint,
+                    source_movie_id=movie_id_1,
+                    target_movie_id=movie_id_2,
+                    vote_type=VoteType.DIRECT_LINK,
+                )
 
-        with sync_get_redis_client() as redis_client:
-            crud_vote.record_user_vote(
-                redis_client, fingerprint, movie_id_1, movie_id_2
-            )
+                with sync_get_redis_client() as redis_client:
+                    crud_vote.record_user_vote(
+                        redis_client, fingerprint, movie_id_1, movie_id_2
+                    )
+            else:
+                logger.info(
+                    f"No direct recommendation link found between {movie_id_1} and {movie_id_2}."
+                )
+                return
 
         try:
             global DRIVER
@@ -225,7 +233,7 @@ def process_similarity_vote(self, fingerprint: str, movie_id_1: int, movie_id_2:
             (
                 logger.info("Successfully processed vote in graph database.")
                 if success
-                else logger.warning("Failed to process vote in graph database.")
+                else logger.error("Failed to process vote in graph database.")
             )
 
         except:

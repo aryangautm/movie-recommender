@@ -1,9 +1,10 @@
 import enum
 
-from app.core.database import Base
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Column, Date, Enum, Float, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ENUM, JSONB
+
+from app.core.database import Base
 
 
 class MovieVisibility(str, enum.Enum):

@@ -1,8 +1,9 @@
 from typing import Any, Dict, List
 
-from app.models.processing_queue import ProcessingQueue, ProcessingStatus
 from sqlalchemy import insert
 from sqlalchemy.orm import Session
+
+from app.models.processing_queue import ProcessingQueue, ProcessingStatus
 
 
 def bulk_create_process(db: Session, movies: List[Dict[str, Any]]):

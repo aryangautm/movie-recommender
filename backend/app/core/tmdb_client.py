@@ -1,12 +1,16 @@
+import json
 from typing import Any, Dict, Optional
 
 import httpx
 
 from .config import settings
+from .redis import sync_get_redis_client
 
 # Constants
 TMDB_API_URL = "https://api.themoviedb.org/3"
 REQUEST_TIMEOUT = 10  # seconds
+GENRE_CACHE_KEY = "tmdb:genre_map"
+GENRE_CACHE_TTL = 7 * 24 * 60 * 60
 
 
 chars_to_remove = "·'.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
@@ -57,101 +61,136 @@ class TMDbClient:
         """
         return await self._make_request(client, f"/movie/{movie_id}/images")
 
-    def get_genre_map(self) -> Dict[int, str]:
+    def get_genre_map(self, max_retries: int = 3) -> Dict[int, str]:
         """
         Fetches the genre ID to name mapping from TMDb.
         The result is cached in memory for the lifetime of the process.
+        Retries the request up to max_retries times on failure.
         """
         print("Fetching genre map from TMDb API...")
-        try:
-            with httpx.Client() as client:
-                response = client.get(
-                    f"{self.base_url}/genre/movie/list",
-                    params=self.params,
-                    timeout=REQUEST_TIMEOUT,
-                )
-                response.raise_for_status()
-                genres = response.json().get("genres", [])
-                return {genre["id"]: genre["name"] for genre in genres}
-        except httpx.RequestError as e:
-            print(f"An error occurred while requesting TMDb: {e}")
-            return {}
-        except httpx.HTTPStatusError as e:
-            print(
-                f"TMDb API returned an error: {e.response.status_code} - {e.response.text}"
-            )
-            return {}
+        with sync_get_redis_client() as redis_client:
+            cached = redis_client.get(GENRE_CACHE_KEY)
+        if cached:
+            print("Genre map found in Redis cache.")
+            return json.loads(cached)
 
-    async def fetch_trending_from_tmdb(self, page: int = 1) -> Dict[str, Any]:
+        for attempt in range(max_retries):
+            try:
+                with httpx.Client() as client:
+                    response = client.get(
+                        f"{self.base_url}/genre/movie/list",
+                        params=self.params,
+                        timeout=REQUEST_TIMEOUT,
+                    )
+                    response.raise_for_status()
+                    genres = response.json().get("genres", [])
+                    genre_map = {int(genre["id"]): genre["name"] for genre in genres}
+                    with sync_get_redis_client() as redis_client:
+                        redis_client.set(
+                            GENRE_CACHE_KEY, json.dumps(genre_map), ex=GENRE_CACHE_TTL
+                        )
+                    return genre_map
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    print(
+                        f"An error occurred while fetching genre map after {max_retries} attempts: {e}"
+                    )
+                    return {}
+                else:
+                    print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
+
+    async def fetch_trending_from_tmdb(
+        self, page: int = 1, max_retries: int = 3
+    ) -> Dict[str, Any]:
         """
         Fetches a page of trending movies from the TMDb API using an async client.
+        Retries the request up to max_retries times on failure.
         """
-        async with httpx.AsyncClient() as client:
-            try:
-                params = {**self.params, "language": "en-US", "page": page}
-                response = await client.get(
-                    f"{self.base_url}/trending/movie/day", params=params
-                )
-                response.raise_for_status()  # Will raise an exception for 4xx/5xx responses
-                return response.json()
-            except httpx.RequestError as e:
-                print(f"An error occurred while requesting TMDb: {e}")
-                return None
-            except httpx.HTTPStatusError as e:
-                print(
-                    f"TMDb API returned an error: {e.response.status_code} - {e.response.text}"
-                )
-                return None
+        for attempt in range(max_retries):
+            async with httpx.AsyncClient() as client:
+                try:
+                    params = {**self.params, "language": "en-US", "page": page}
+                    response = await client.get(
+                        f"{self.base_url}/trending/movie/day", params=params
+                    )
+                    response.raise_for_status()  # Will raise an exception for 4xx/5xx responses
+                    return response.json()
+                except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                    if attempt == max_retries - 1:  # Last attempt
+                        print(
+                            f"An error occurred while fetching trending movies after {max_retries} attempts: {e}"
+                        )
+                        return None
+                    else:
+                        print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
     def search_movie(
-        self, query: str, release_year: Optional[int] = None
+        self, query: str, release_year: Optional[int] = None, max_retries: int = 3
     ) -> Optional[Dict[str, Any]]:
         """
         Searches for movies by title and fetches results from TMDb.
+        Retries the request up to max_retries times on failure.
         """
-        try:
-            movie_data = None
-            response_data = {}
-            query = query.translate(translation_table).strip().lower()
-            with httpx.Client() as client:
-                params = {
-                    **self.params,
-                    "query": query,
-                    "include_adult": False,
-                    "year": release_year,
-                }
-                response = client.get(f"{self.base_url}/search/movie", params=params)
-                response.raise_for_status()
-                response_data = response.json()
-            if response_data.get("results"):
-                for result in response_data["results"]:
-                    result_title = (
-                        result["title"].translate(translation_table).strip().lower()
+        for attempt in range(max_retries):
+            try:
+                movie_data = None
+                response_data = {}
+                query = query.translate(translation_table).strip().lower()
+                with httpx.Client() as client:
+                    params = {
+                        **self.params,
+                        "query": query,
+                        "include_adult": False,
+                        "year": release_year,
+                    }
+                    response = client.get(
+                        f"{self.base_url}/search/movie", params=params
                     )
-                    if result_title == query:
-                        movie_data = result
-                        break
-            return movie_data
-        except httpx.RequestError as e:
-            print(f"An error occurred while searching for movies: {e}")
-            return None
+                    response.raise_for_status()
+                    response_data = response.json()
+                if response_data.get("results"):
+                    for result in response_data["results"]:
+                        result_title = (
+                            result["title"].translate(translation_table).strip().lower()
+                        )
+                        if result_title == query:
+                            movie_data = result
+                            break
+                return movie_data
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    print(
+                        f"An error occurred while searching for movies after {max_retries} attempts: {e}"
+                    )
+                    return None
+                else:
+                    print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
-    def get_movie_by_id(self, movie_id: int) -> Optional[Dict[str, Any]]:
+    def get_movie_by_id(
+        self, movie_id: int, max_retries: int = 3
+    ) -> Optional[Dict[str, Any]]:
         """
         Fetches movie details by TMDb movie ID.
+        Retries the request up to max_retries times on failure.
         """
-        try:
-            movie_data = None
-            with httpx.Client() as client:
-                response = client.get(
-                    f"{self.base_url}/movie/{movie_id}", params=self.params
-                )
-                response.raise_for_status()
-                movie_data = response.json()
-            return movie_data
-        except httpx.RequestError as e:
-            print(f"An error occurred while fetching movie by id: {e}")
-            return None
+        for attempt in range(max_retries):
+            try:
+                movie_data = None
+                with httpx.Client() as client:
+                    response = client.get(
+                        f"{self.base_url}/movie/{movie_id}", params=self.params
+                    )
+                    response.raise_for_status()
+                    movie_data = response.json()
+                return movie_data
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
+                if attempt == max_retries - 1:  # Last attempt
+                    print(
+                        f"An error occurred while fetching movie by id after {max_retries} attempts: {e}"
+                    )
+                    return None
+                else:
+                    print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
 
 # Create a single instance to be used across the application

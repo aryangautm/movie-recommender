@@ -1,10 +1,11 @@
 from typing import Any, Dict, List, Optional, Tuple
 
-from app.models.movie import Movie
-from app.utils.scoring import calculate_effective_score
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
+
+from app.models.movie import Movie
+from app.utils.scoring import calculate_effective_score
 
 from ..models.recommendation import LlmRecommendation
 

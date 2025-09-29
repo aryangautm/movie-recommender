@@ -1,8 +1,9 @@
 from datetime import date
 from typing import Any, List, Optional
 
-from app.utils.encryption import encrypt_id
 from pydantic import BaseModel, Field, field_serializer
+
+from app.utils.encryption import encrypt_id
 
 
 class Genre(BaseModel):
