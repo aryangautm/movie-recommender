@@ -8,9 +8,10 @@ interface SearchResultsProps {
   isLoading: boolean;
   show: boolean;
   onSelectMovie: (movie: Movie) => void;
+  backgroundColor?: string;
 }
 
-const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show, onSelectMovie }) => {
+const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show, onSelectMovie, backgroundColor = 'bg-[#7D1AED]/10' }) => {
   const hasResults = !isLoading && results.length > 0;
   const noResults = !isLoading && results.length === 0;
 
@@ -22,7 +23,7 @@ const SearchResults: React.FC<SearchResultsProps> = ({ results, isLoading, show,
         ${show ? 'max-h-[40vh] opacity-100 mt-4' : 'max-h-0 opacity-0 mt-0'}
       `}
     >
-      <div className="h-full rounded-2xl border border-white/10 bg-[#7D1AED]/10 p-4 shadow-2xl backdrop-blur-lg">
+      <div className={`h-full rounded-2xl border border-white/10 ${backgroundColor} p-4 shadow-2xl backdrop-blur-lg`}>
         {/* Grid container to stack all states and allow for smooth resizing */}
         <div className="grid">
           {/* Each state is a grid item stacked in the same cell */}
