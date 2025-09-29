@@ -21,14 +21,10 @@ def bulk_create_llm_recommendations(
 
     new_recs = [LlmRecommendation(**data) for data in recommendations_data]
     db.add_all(new_recs)
-
     db.flush(new_recs)
-
-    for rec_obj, rec_data in zip(new_recs, recommendations_data):
-        rec_data["id"] = rec_obj.id
-
     db.commit()
-    return recommendations_data
+
+    return new_recs
 
 
 def get_recommendations(db: Session, movie_id_1: int, movie_id_2: int) -> List[int]:
@@ -92,6 +88,7 @@ async def get_recommendations_by_trigger_hash(
             Movie.title,
             Movie.release_year,
             Movie.poster_path,
+            Movie.overview,
         )
         .join(Movie, LlmRecommendation.recommended_movie_id == Movie.id)
         .where(LlmRecommendation.trigger_keywords_hash == trigger_hash)
@@ -107,12 +104,13 @@ async def get_recommendations_by_trigger_hash(
             "id": row.id,
             "title": row.title,
             "release_year": row.release_year,
+            "overview": row.overview,
             "poster_path": row.poster_path,
             "justification": row.llm_justification,
             "score": calculate_effective_score(
                 user_votes=row.user_votes, ai_score=row.llm_score, similarity_score=None
             ),
-            "recommendation_id": row.recommendation_id,
+            "rec_id": row.recommendation_id,
         }
         for row in rows
     ]
