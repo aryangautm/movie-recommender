@@ -44,3 +44,21 @@ body {
         transform: scale(0.8);
     }
 }
+
+@keyframes bounce-subtle {
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.02);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
+.animate-bounce-subtle {
+    animation: bounce-subtle 0.6s ease-out;
+}

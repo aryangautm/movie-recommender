@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext } from 'react';
-import { Routes, Route } from 'react-router-dom';
-import { WavingHandIcon } from './components/icons';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { HomeIcon } from './components/icons';
 import HeaderNavigation from './components/HeaderNavigation';
 import SearchPage from './pages/SearchPage';
 import TrendingPage from './pages/TrendingPage';
@@ -47,16 +47,29 @@ export const useHeader = () => {
 
 const App: React.FC = () => {
   const [centerContent, setCenterContent] = useState<React.ReactNode>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleHomeClick = () => {
+    navigate('/');
+  };
+
+  const isHomePage = location.pathname === '/';
 
   return (
     <HeaderContext.Provider value={{ centerContent, setCenterContent }}>
       <div data-scroll-container className="relative min-h-screen font-sans text-white bg-transparent">
         <Header.Root>
           <Header.Left className="hidden sm:flex">
-            <div className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg">
-              <WavingHandIcon />
-              <span>Hey!</span>
-            </div>
+            {!isHomePage && (
+              <button
+                onClick={handleHomeClick}
+                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg hover:bg-black/40 transition-colors cursor-pointer"
+              >
+                <HomeIcon className="w-4 h-4" />
+                <span>Home</span>
+              </button>
+            )}
           </Header.Left>
 
           <Header.Center>
