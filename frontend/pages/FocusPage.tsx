@@ -50,12 +50,14 @@ const FocusPage: React.FC = () => {
   }, [isScrolled, movie, setCenterContent]);
 
   useEffect(() => {
-    const fetchMovie = async () => {
+    const fetchMovie = async (signal: AbortSignal) => {
       if (!id) return;
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/${id}`);
+        const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/${id}`, {
+          signal
+        });
         if (!response.ok) {
           throw new Error('Network response was not ok');
         }
@@ -75,6 +77,10 @@ const FocusPage: React.FC = () => {
         };
         setMovie(formattedMovie);
       } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          // Request was aborted, don't update state
+          return;
+        }
         console.error("Failed to fetch movie:", error);
         setError("Failed to load movie details.");
       } finally {
@@ -82,7 +88,12 @@ const FocusPage: React.FC = () => {
       }
     };
 
-    fetchMovie();
+    const abortController = new AbortController();
+    fetchMovie(abortController.signal);
+
+    return () => {
+      abortController.abort();
+    };
   }, [id]);
 
   const fetchSuggestions = useCallback(async (options?: { keywords?: string[]; isRefresh?: boolean }) => {

@@ -30,14 +30,16 @@ const TrendingPage: React.FC = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchTrending = useCallback(async (pageNum: number, isNewType: boolean) => {
+    const fetchTrending = useCallback(async (pageNum: number, isNewType: boolean, signal?: AbortSignal) => {
         setIsLoading(true);
         if (isNewType) {
             setError(null);
         }
 
         try {
-            const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/trending?page=${pageNum}`);
+            const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/trending?page=${pageNum}`, {
+                signal
+            });
             if (!response.ok) {
                 throw new Error('Network response was not ok');
             }
@@ -49,6 +51,10 @@ const TrendingPage: React.FC = () => {
             setHasMore(data.page < data.total_pages);
 
         } catch (err) {
+            if (err instanceof Error && err.name === 'AbortError') {
+                // Request was aborted, don't update state
+                return;
+            }
             console.error("Failed to fetch trending movies:", err);
             setError("Couldn't load trending movies. Please try again later.");
         } finally {
@@ -58,12 +64,17 @@ const TrendingPage: React.FC = () => {
 
     useEffect(() => {
         if (activeType === 'movie') {
-            fetchTrending(1, true);
+            const abortController = new AbortController();
+            fetchTrending(1, true, abortController.signal);
+
+            return () => {
+                abortController.abort();
+            };
         } else {
             setMovies([]);
             setHasMore(false);
         }
-    }, [activeType, fetchTrending]);
+    }, [activeType]);
 
     useEffect(() => {
         const handleScroll = () => {
@@ -77,7 +88,7 @@ const TrendingPage: React.FC = () => {
 
         window.addEventListener('scroll', handleScroll);
         return () => window.removeEventListener('scroll', handleScroll);
-    }, [isLoading, hasMore, page, activeType, fetchTrending]);
+    }, [isLoading, hasMore, page, activeType]);
 
     const handleSelectMovie = (movie: Movie) => {
         navigate(`/movie/${movie.id}`);
