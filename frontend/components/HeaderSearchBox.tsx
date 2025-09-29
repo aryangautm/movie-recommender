@@ -62,7 +62,7 @@ const useTypingAnimation = (words: string[], typingSpeed = 100, deletingSpeed = 
 
 const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
     placeholder = "|",
-    placeholderWords = ["The Godfather", "The Dark Knight", "Schindler's List", "Superman Returns", "The Matrix"],
+    placeholderWords = ["The Godfather", "Sholay", "Citizen Kane", "3 Idiots", "Casablanca", "Mughal-E-Azam", "The Dark Knight", "Dilwale Dulhania Le Jayenge", "Pulp Fiction", "Lagaan"],
     onSearch
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +70,7 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
     const [isLoading, setIsLoading] = useState(false);
     const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
     const [showResults, setShowResults] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(false);
     const navigate = useNavigate();
     const searchContainerRef = useRef<HTMLDivElement>(null);
 
@@ -95,6 +96,7 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
         const handleClickOutside = (event: MouseEvent) => {
             if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
                 setShowResults(false);
+                setIsExpanded(false);
             }
         };
 
@@ -108,6 +110,9 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
     useEffect(() => {
         if (searchQuery.length >= 3) {
             setShowResults(true);
+        } else if (searchQuery.length === 0) {
+            // Collapse when search is cleared
+            setIsExpanded(false);
         }
     }, [searchQuery]);
 
@@ -172,8 +177,22 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
         setSearchQuery(e.target.value);
     };
 
+    const handleInputFocus = () => {
+        setIsExpanded(true);
+    };
+
+    const handleInputBlur = () => {
+        // Add a small delay to allow for result selection
+        setTimeout(() => {
+            if (!searchContainerRef.current?.contains(document.activeElement)) {
+                setIsExpanded(false);
+            }
+        }, 150);
+    };
+
     const handleSelectMovie = (movie: Movie) => {
         setShowResults(false);
+        setIsExpanded(false);
         navigate(`/movie/${movie.id}`);
     };
 
@@ -181,7 +200,12 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
         <div className="relative" ref={searchContainerRef}>
             <form
                 onSubmit={handleSubmit}
-                className="flex items-center gap-4 p-1 bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg"
+                className={`flex items-center gap-4 p-1 bg-black/30 rounded-full backdrop-blur-sm border border-white/10 shadow-lg transition-all duration-500 ease-out ${isExpanded ? 'w-[25rem]' : 'w-[15rem]'
+                    } ${isExpanded ? 'animate-bounce-subtle' : ''}`}
+                style={{
+                    animationDuration: isExpanded ? '0.6s' : '0s',
+                    animationFillMode: 'forwards'
+                }}
             >
                 <div className="flex items-center justify-center gap-2 rounded-full transition-all duration-300 font-medium h-11 w-11 sm:h-auto sm:w-auto sm:py-2.5 sm:px-5 bg-gray-200 text-black shadow-md">
                     <SearchIcon className="h-6 w-6 sm:h-5 sm:w-5" />
@@ -190,8 +214,10 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
                     type="text"
                     value={searchQuery}
                     onChange={handleInputChange}
+                    onFocus={handleInputFocus}
+                    onBlur={handleInputBlur}
                     placeholder={displayPlaceholder}
-                    className="bg-transparent text-white placeholder-gray-400/50 outline-none text-sm font-medium pr-4 py-2.5 min-w-0 w-64 sm:w-[25rem]"
+                    className="bg-transparent text-white placeholder-gray-400/50 outline-none text-sm font-medium pr-4 py-2.5 min-w-0 flex-1"
                 />
             </form>
             <div className="absolute top-full left-0 right-0 z-50 mt-2">
