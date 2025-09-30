@@ -21,13 +21,25 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     with op.get_context().autocommit_block():
-        op.execute(
+        # Check if index exists before creating
+        connection = op.get_bind()
+        result = connection.execute(
+            sa.text(
+                """
+            SELECT 1 FROM pg_indexes 
+            WHERE tablename = 'movies' AND indexname = 'idx_movie_title_fts'
             """
-            CREATE INDEX CONCURRENTLY idx_movie_title_fts 
-            ON movies 
-            USING GIN (to_tsvector('english', title));
-        """
-        )
+            )
+        ).fetchone()
+
+        if not result:
+            op.execute(
+                """
+                CREATE INDEX CONCURRENTLY idx_movie_title_fts 
+                ON movies 
+                USING GIN (to_tsvector('english', title));
+            """
+            )
 
 
 def downgrade() -> None:

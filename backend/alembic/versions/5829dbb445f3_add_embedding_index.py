@@ -20,13 +20,25 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # For custom indexes like HNSW, using op.execute is the cleanest way
-    op.execute(
+    # Check if index exists before creating - makes migration idempotent
+    connection = op.get_bind()
+    result = connection.execute(
+        sa.text(
+            """
+        SELECT 1 FROM pg_indexes 
+        WHERE tablename = 'movies' AND indexname = 'ix_movies_embedding'
         """
-        CREATE INDEX ix_movies_embedding ON movies 
-        USING hnsw (embedding vector_cosine_ops);
-    """
-    )
+        )
+    ).fetchone()
+
+    if not result:
+        # For custom indexes like HNSW, using op.execute is the cleanest way
+        op.execute(
+            """
+            CREATE INDEX ix_movies_embedding ON movies 
+            USING hnsw (embedding vector_cosine_ops);
+        """
+        )
 
 
 def downgrade() -> None:
