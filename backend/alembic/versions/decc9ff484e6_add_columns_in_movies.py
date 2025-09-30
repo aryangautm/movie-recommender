@@ -27,14 +27,26 @@ def upgrade() -> None:
     op.add_column("movies", sa.Column("original_title", sa.String(), nullable=True))
     op.add_column("movies", sa.Column("runtime", sa.Integer(), nullable=True))
     op.add_column("movies", sa.Column("tagline", sa.String(), nullable=True))
-    op.create_index(
-        op.f("ix_movies_embedding"),
-        "movies",
-        ["embedding"],
-        unique=False,
-        postgresql_using="hnsw",
-        postgresql_ops={"embedding": "vector_cosine_ops"},
-    )
+    # Check if index exists before creating
+    connection = op.get_bind()
+    result = connection.execute(
+        sa.text(
+            """
+        SELECT 1 FROM pg_indexes 
+        WHERE tablename = 'movies' AND indexname = 'ix_movies_embedding'
+        """
+        )
+    ).fetchone()
+
+    if not result:
+        op.create_index(
+            op.f("ix_movies_embedding"),
+            "movies",
+            ["embedding"],
+            unique=False,
+            postgresql_using="hnsw",
+            postgresql_ops={"embedding": "vector_cosine_ops"},
+        )
 
     # ### end Alembic commands ###
 
