@@ -71,7 +71,6 @@ async def get_advanced_recommendations(
             for parsed_chunk in llm_client.multi_turn_rec(
                 source_movie, request.selected_keywords
             ):
-                print("Parsed Chunk:", parsed_chunk)
 
                 enriched_chunk = crud_movie.enrich_recommendations(
                     sync_db, parsed_chunk

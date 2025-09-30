@@ -114,13 +114,12 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
         tools=tools,
     )
     duplicate_movies = set()
-
     chat = client.chats.create(
         model=model,
         config=generate_content_config,
         history=contents,
     )
-    for _ in range(6 // count):
+    for _ in range(12 // count):
         input_message = f"Recommend {count} different movies"
 
         if duplicate_movies:
@@ -137,7 +136,7 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
 
             try:
                 for movie in sim_movies["movies"]:
-                    duplicate_movies.add(movie["title"])
+                    duplicate_movies.add(movie["movie_title"])
             except:
                 pass
 
@@ -147,7 +146,6 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
 
         elapsed_ms = time.perf_counter() - start_ts
         print("Time to generate one batch", f"{elapsed_ms:.1f}", "seconds")
-
         yield sim_movies
 
 
