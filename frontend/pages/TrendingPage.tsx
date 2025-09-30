@@ -42,7 +42,7 @@ const TrendingPage: React.FC = () => {
         }
 
         try {
-            const response = await fetch(`${API_URL}/api/v1/movies/trending?page=${pageNum}`, {
+            const response = await fetch(`${API_URL}/v1/movies/trending?page=${pageNum}`, {
                 signal
             });
             if (!response.ok) {
