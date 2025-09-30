@@ -30,7 +30,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sour
 
     try {
       const fingerprint = await getFingerprint();
-      const response = await fetch(`${API_URL}/api/v1/upvote`, {
+      const response = await fetch(`${API_URL}/v1/upvote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

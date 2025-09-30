@@ -126,7 +126,7 @@ const HeaderSearchBox: React.FC<HeaderSearchBoxProps> = ({
         const fetchSearchResults = async () => {
             setIsLoading(true);
             try {
-                const response = await fetch(`${API_URL}/api/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
+                const response = await fetch(`${API_URL}/v1/movies/search?q=${encodeURIComponent(debouncedQuery)}`);
                 if (!response.ok) {
                     throw new Error('Network response was not ok');
                 }

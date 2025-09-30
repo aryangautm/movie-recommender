@@ -54,7 +54,7 @@ const FocusPage: React.FC = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${API_URL}/api/v1/movies/${id}`, {
+        const response = await fetch(`${API_URL}/v1/movies/${id}`, {
           signal
         });
         if (!response.ok) {
@@ -115,7 +115,7 @@ const FocusPage: React.FC = () => {
       let keywords = options?.keywords || [];
 
       console.log('Finding recommendations based on keywords:', keywords);
-      const response = await fetch(`${API_URL}/api/v1/recommendations`, {
+      const response = await fetch(`${API_URL}/v1/recommendations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -255,10 +255,6 @@ const FocusPage: React.FC = () => {
   const handleFindSimilar = (selectedKeywords: string[]) => {
     fetchSuggestions({ keywords: selectedKeywords });
   };
-
-  const handleRefreshSuggestions = useCallback(() => {
-    fetchSuggestions({ isRefresh: true });
-  }, [fetchSuggestions]);
 
   if (isLoading) {
     return (
