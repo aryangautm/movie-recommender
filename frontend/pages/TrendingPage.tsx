@@ -29,11 +29,16 @@ const TrendingPage: React.FC = () => {
     const [hasMore, setHasMore] = useState(true);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [paginationError, setPaginationError] = useState(false);
 
     const fetchTrending = useCallback(async (pageNum: number, isNewType: boolean, signal?: AbortSignal) => {
         setIsLoading(true);
         if (isNewType) {
             setError(null);
+            setPaginationError(false);
+        } else {
+            // Clear pagination error when retrying
+            setPaginationError(false);
         }
 
         try {
@@ -56,7 +61,17 @@ const TrendingPage: React.FC = () => {
                 return;
             }
             console.error("Failed to fetch trending movies:", err);
-            setError("Couldn't load trending movies. Please try again later.");
+
+            // Only clear movies and show error if this is the first page (isNewType)
+            // For pagination errors, just show a temporary error but keep existing data
+            if (isNewType) {
+                setError("Couldn't load trending movies. Please try again later.");
+            } else {
+                // For pagination errors, show retry option but keep existing movies
+                setPaginationError(true);
+                setHasMore(false); // Temporarily stop auto-loading
+                console.warn("Failed to load more movies, but keeping existing data");
+            }
         } finally {
             setIsLoading(false);
         }
@@ -94,6 +109,12 @@ const TrendingPage: React.FC = () => {
         navigate(`/movie/${movie.id}`);
     };
 
+    const handleRetryPagination = () => {
+        setPaginationError(false);
+        setHasMore(true);
+        fetchTrending(page, false);
+    };
+
     const renderContent = () => {
         if (activeType === 'tvShow') {
             return (
@@ -112,7 +133,7 @@ const TrendingPage: React.FC = () => {
         }
 
         if (error) {
-            return <div className="text-center py-20 text-red-400">{error}</div>;
+            return <div className="text-center py-20 text-white-400 font-bold">{error}</div>;
         }
 
         if (movies.length === 0 && !isLoading) {
@@ -135,8 +156,19 @@ const TrendingPage: React.FC = () => {
                         <SpinnerIcon className="w-10 h-10 text-white" />
                     </div>
                 )}
-                {!isLoading && !hasMore && (
+                {!isLoading && !hasMore && !paginationError && (
                     <div className="text-center py-10 text-gray-400">You've reached the end!</div>
+                )}
+                {paginationError && (
+                    <div className="text-center py-10">
+                        <p className="text-red-400 mb-4">Failed to load more movies</p>
+                        <button
+                            onClick={handleRetryPagination}
+                            className="px-6 py-2 bg-[#7D1AED]/10 hover:bg-[#7D1AED]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 shadow-lg"
+                        >
+                            Try Again
+                        </button>
+                    </div>
                 )}
             </>
         );
