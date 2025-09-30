@@ -5,8 +5,8 @@ import { SpinnerIcon } from '@/components/icons';
 import SuggestionCard from '@/components/SuggestionCard';
 import KeywordSelector from '@/components/KeywordSelector';
 import HeaderSearchBox from '@/components/HeaderSearchBox';
+import { API_URL } from '../api/config';
 
-const BACKEND_BASE_URL = 'http://localhost:8000';
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
 const POSTER_SIZE = 'original';
 const BACKDROP_SIZE = 'original';
@@ -46,11 +46,15 @@ const FocusPage: React.FC = () => {
 
   useEffect(() => {
     const fetchMovie = async (signal: AbortSignal) => {
-      if (!id) return;
+      if (!id) {
+        setIsLoading(false);
+        setError("No movie ID provided.");
+        return;
+      }
       setIsLoading(true);
       setError(null);
       try {
-        const response = await fetch(`${BACKEND_BASE_URL}/api/v1/movies/${id}`, {
+        const response = await fetch(`${API_URL}/api/v1/movies/${id}`, {
           signal
         });
         if (!response.ok) {
@@ -78,9 +82,11 @@ const FocusPage: React.FC = () => {
         }
         console.error("Failed to fetch movie:", error);
         setError("Failed to load movie details.");
-      } finally {
         setIsLoading(false);
       }
+
+      // Only set loading to false if request completed successfully
+      setIsLoading(false);
     };
 
     const abortController = new AbortController();
@@ -109,7 +115,7 @@ const FocusPage: React.FC = () => {
       let keywords = options?.keywords || [];
 
       console.log('Finding recommendations based on keywords:', keywords);
-      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/recommendations`, {
+      const response = await fetch(`${API_URL}/api/v1/recommendations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +162,6 @@ const FocusPage: React.FC = () => {
             if (line.trim()) {
               try {
                 const chunk = JSON.parse(line);
-                console.log('Processing chunk:', chunk);
 
                 if (chunk.results && Array.isArray(chunk.results)) {
                   const newSuggestions: Suggestion[] = chunk.results.map((item: any) => ({
@@ -168,7 +173,6 @@ const FocusPage: React.FC = () => {
                     justification: item.justification || [],
                   }));
 
-                  console.log('Parsed new suggestions:', newSuggestions.length);
 
                   // Update suggestions using the functional setState pattern to ensure we get the latest state
                   setSuggestions(prevSuggestions => {
@@ -178,8 +182,6 @@ const FocusPage: React.FC = () => {
                     // Filter out duplicates from new suggestions
                     const uniqueNewSuggestions = newSuggestions.filter(s => !existingIds.has(s.id));
 
-                    console.log('Adding unique suggestions:', uniqueNewSuggestions.length);
-                    console.log('Total suggestions will be:', prevSuggestions.length + uniqueNewSuggestions.length);
 
                     // Return new array with accumulated suggestions
                     return [...prevSuggestions, ...uniqueNewSuggestions];
@@ -266,13 +268,32 @@ const FocusPage: React.FC = () => {
     );
   }
 
-  if (error || !movie) {
+  if (!isLoading && error) {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
-        <p className="text-red-400 text-lg">{error || "Movie not found."}</p>
+        <p className="text-red-400 text-lg">{error}</p>
         <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
           Go Home
         </button>
+      </div>
+    );
+  }
+
+  if (!isLoading && !movie) {
+    return (
+      <div className="flex flex-col justify-center items-center h-screen">
+        <p className="text-red-400 text-lg">Movie not found.</p>
+        <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+          Go Home
+        </button>
+      </div>
+    );
+  }
+
+  if (!movie) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <SpinnerIcon className="w-12 h-12 text-white" />
       </div>
     );
   }

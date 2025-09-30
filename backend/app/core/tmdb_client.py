@@ -61,7 +61,7 @@ class TMDbClient:
         """
         return await self._make_request(client, f"/movie/{movie_id}/images")
 
-    def get_genre_map(self, max_retries: int = 3) -> Dict[int, str]:
+    def get_genre_map(self, max_retries: int = 5) -> Dict[int, str]:
         """
         Fetches the genre ID to name mapping from TMDb.
         The result is cached in memory for the lifetime of the process.
@@ -100,7 +100,7 @@ class TMDbClient:
                     print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
     async def fetch_trending_from_tmdb(
-        self, page: int = 1, max_retries: int = 3
+        self, page: int = 1, max_retries: int = 5
     ) -> Dict[str, Any]:
         """
         Fetches a page of trending movies from the TMDb API using an async client.
@@ -125,7 +125,7 @@ class TMDbClient:
                         print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
     def search_movie(
-        self, query: str, release_year: Optional[int] = None, max_retries: int = 3
+        self, query: str, release_year: Optional[int] = None, max_retries: int = 5
     ) -> Optional[Dict[str, Any]]:
         """
         Searches for movies by title and fetches results from TMDb.
@@ -167,7 +167,7 @@ class TMDbClient:
                     print(f"Attempt {attempt + 1} failed, retrying... Error: {e}")
 
     def get_movie_by_id(
-        self, movie_id: int, max_retries: int = 3
+        self, movie_id: int, max_retries: int = 5
     ) -> Optional[Dict[str, Any]]:
         """
         Fetches movie details by TMDb movie ID.

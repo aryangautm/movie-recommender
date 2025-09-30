@@ -222,7 +222,18 @@ async def search_movies_by_title(
     Full-text search is used here, with exact matches boosted to the top.
     """
 
-    query_parts = query.strip().split()
+    # Clean the query parts to avoid PostgreSQL tsquery syntax errors
+    query_parts = []
+    for part in query.strip().split():
+        # Remove special characters that can cause tsquery syntax errors
+        cleaned_part = "".join(c for c in part if c.isalnum())
+        if cleaned_part:  # Only add non-empty parts
+            query_parts.append(cleaned_part)
+
+    if not query_parts:
+        # If no valid query parts, return empty result
+        return []
+
     tsquery_str = " & ".join([part + ":*" for part in query_parts])
 
     match_condition = func.to_tsvector("english", Movie.title).op("@@")(
@@ -235,7 +246,7 @@ async def search_movies_by_title(
     ).label("rank")
 
     # Boost exact (case-insensitive) matches to the top
-    exact_match_boost = case((Movie.title.ilike(query), 0), else_=1).label(
+    exact_match_boost = case((Movie.title.ilike(f"%{query}%"), 0), else_=1).label(
         "exact_match_priority"
     )
 

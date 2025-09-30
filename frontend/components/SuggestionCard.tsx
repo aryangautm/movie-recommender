@@ -12,7 +12,7 @@ interface SuggestionCardProps {
 }
 const IMAGES_BASE_URL = 'https://image.tmdb.org/t/p';
 const POSTER_SIZE = 'w300';
-const BACKEND_BASE_URL = 'http://localhost:8000';
+import { API_URL } from '../api/config';
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sourceMovieId }) => {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sour
 
     try {
       const fingerprint = await getFingerprint();
-      const response = await fetch(`${BACKEND_BASE_URL}/api/v1/upvote`, {
+      const response = await fetch(`${API_URL}/api/v1/upvote`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
