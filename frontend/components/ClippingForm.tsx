@@ -1,18 +1,29 @@
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowRightIcon, SpinnerIcon } from './icons';
 import ContentTypeToggle, { ContentType } from './ContentTypeToggle';
 
 const PLACEHOLDER_TEXTS = [
-  "The Shawshank Redemption",
   "The Godfather",
-  "Breaking Bad",
-  "The Dark Knight",
-  "Pulp Fiction",
-  "Forrest Gump",
-  "Inception",
-  "Game of Thrones",
-  "Stranger Things",
+  "Interstellar",
+  "The Prestige",
+  "Swades",
+  "Parasite",
+  "Taare Zameen Par",
+  "The Lord of the Rings",
+  "Zindagi Na Milegi Dobara",
+  "Joker",
+  "Drishyam",
+  "The Social Network",
+  "Dangal",
+  "Gangs of Wasseypur",
+  "Haider",
+  "Barfi!",
+  "Mad Max: Fury Road",
+  "Queen",
+  "The Lunchbox",
+  "Whiplash"
 ];
 
 interface ClippingFormProps {
@@ -22,6 +33,7 @@ interface ClippingFormProps {
 }
 
 const ClippingForm: React.FC<ClippingFormProps> = ({ searchQuery, setSearchQuery, isLoading }) => {
+  const navigate = useNavigate();
   const [activeContentType, setActiveContentType] = useState<ContentType>('movie');
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const [animationClass, setAnimationClass] = useState('animate-placeholder-in');
@@ -40,10 +52,16 @@ const ClippingForm: React.FC<ClippingFormProps> = ({ searchQuery, setSearchQuery
     return () => clearInterval(interval);
   }, []);
 
+  const handleSearch = () => {
+    if (searchQuery.length >= 2) {
+      navigate(`/search?q=${encodeURIComponent(searchQuery)}`);
+    }
+  };
+
 
   return (
     <div className="w-full max-w-xl lg:max-w-2xl bg-[#171717] backdrop-blur-xl border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl space-y-6">
-      
+
       {/* Search Input */}
       <div className="relative">
         <input
@@ -63,15 +81,16 @@ const ClippingForm: React.FC<ClippingFormProps> = ({ searchQuery, setSearchQuery
             </span>
           </div>
         )}
-        <button 
-          disabled={searchQuery.length < 3 || isLoading}
+        <button
+          onClick={handleSearch}
+          disabled={searchQuery.length < 2 || isLoading}
           className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-gray-200 text-black rounded-full hover:bg-white transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
           {isLoading ? <SpinnerIcon className="h-4 w-4" /> : <ArrowRightIcon className="h-4 w-4" />}
         </button>
       </div>
 
       <ContentTypeToggle activeType={activeContentType} onTypeChange={setActiveContentType} />
-      
+
     </div>
   );
 };

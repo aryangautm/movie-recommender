@@ -81,7 +81,7 @@ const FocusPage: React.FC = () => {
           return;
         }
         console.error("Failed to fetch movie:", error);
-        setError("Failed to load movie details.");
+        setError("Movie not available");
         setIsLoading(false);
       }
 
@@ -267,8 +267,8 @@ const FocusPage: React.FC = () => {
   if (!isLoading && error) {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
-        <p className="text-red-400 text-lg">{error}</p>
-        <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+        <p className="text-white-400 text-lg">{error}</p>
+        <button onClick={() => navigate('/')} className="mt-4 px-6 py-2 bg-[#7D1AED]/10 hover:bg-[#7D1AED]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 shadow-lg">
           Go Home
         </button>
       </div>
@@ -278,8 +278,8 @@ const FocusPage: React.FC = () => {
   if (!isLoading && !movie) {
     return (
       <div className="flex flex-col justify-center items-center h-screen">
-        <p className="text-red-400 text-lg">Movie not found.</p>
-        <button onClick={() => navigate('/')} className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+        <p className="text-white-400 text-lg">Movie not found</p>
+        <button onClick={() => navigate('/')} className="mt-4 px-6 py-2 bg-[#7D1AED]/10 hover:bg-[#7D1AED]/20 text-white rounded-full transition-colors backdrop-blur-sm border border-white/10 shadow-lg">
           Go Home
         </button>
       </div>
@@ -310,7 +310,7 @@ const FocusPage: React.FC = () => {
           <SpinnerIcon className="w-8 h-8 text-white" />
         </div>
       ) : suggestionError ? (
-        <div className="text-center py-10 text-red-400">{suggestionError}</div>
+        <div className="text-center py-10 text-white-400">{suggestionError}</div>
       ) : suggestions.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
           {suggestions.map((suggestion, index) => (
@@ -361,11 +361,11 @@ const FocusPage: React.FC = () => {
                   </div>
 
                   <div className="w-full md:w-2/3">
-                    <h1 className="text-4xl lg:text-5xl font-bold">
+                    <h1 className="text-4xl lg:text-5xl font-bold text-center sm:text-left">
                       {movie.title} ({movie.year})
                     </h1>
 
-                    <div className="flex flex-wrap items-center gap-3 mt-4">
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-4">
                       <span className="border border-white/20 rounded-full px-3 py-1 text-sm font-medium bg-black/20">
                         {movie.releaseDate}
                       </span>
@@ -375,17 +375,21 @@ const FocusPage: React.FC = () => {
                     </div>
 
                     <div className="mt-8">
-                      <h2 className="text-2xl font-semibold mb-3">Genre</h2>
-                      <div className="flex flex-wrap gap-3">
-                        {movie.genres.map(genre => (
-                          <button
-                            key={genre}
-                            className="border border-white/20 rounded-full px-4 py-1.5 text-sm hover:bg-white/10 transition-colors duration-300"
-                          >
-                            {genre}
-                          </button>
-                        ))}
-                      </div>
+                      {movie.genres && movie.genres.length > 0 && (
+                        <>
+                          <h2 className="text-2xl font-semibold mb-3">Genre</h2>
+                          <div className="flex flex-wrap gap-3">
+                            {movie.genres.map(genre => (
+                              <button
+                                key={genre}
+                                className="border border-white/20 rounded-full px-4 py-1.5 text-sm hover:bg-white/10 transition-colors duration-300"
+                              >
+                                {genre}
+                              </button>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div className="mt-8">
