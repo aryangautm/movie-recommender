@@ -62,7 +62,12 @@ def ingest_recommended_movies():
     with SessionLocal() as db:
         try:
             pending_movies = crud_processing_queue.get_movies_by_sources(
-                db, [TriggerSource.RECOMMENDATION, TriggerSource.TRENDING]
+                db,
+                [
+                    TriggerSource.RECOMMENDATION,
+                    TriggerSource.TRENDING,
+                    TriggerSource.MANUAL,
+                ],
             )
             crud_processing_queue.bulk_patch_process(
                 db,
@@ -71,7 +76,6 @@ def ingest_recommended_movies():
                     for movie in pending_movies
                 ],
             )
-            db.commit()
 
             if not pending_movies:
                 logger.warning(
@@ -131,32 +135,42 @@ def ingest_recommended_movies():
                 release_date = datetime.fromisoformat(release_date_str).date()
                 release_year = release_date.year
                 if release_date < datetime.now().date():
-                    movies_to_create.append(
-                        {
-                            "id": movie_data.get("id"),
-                            "title": movie_data.get("title"),
-                            "overview": movie_data.get("overview"),
-                            "release_date": release_date,
-                            "release_year": release_year,
-                            "poster_path": movie_data.get("poster_path"),
-                            "backdrop_path": movie_data.get("backdrop_path"),
-                            "genres": genres,
-                            "additional_keywords": [
-                                kw.capitalize()
-                                for kw in movie.properties.get(
-                                    "justification_keywords", []
-                                )
-                            ],
-                            "vote_count": movie_data.get("vote_count"),
-                            "vote_average": movie_data.get("vote_average"),
-                            "visibility": MovieVisibility.PUBLIC,
-                        }
-                    )
+                    movie_data = {
+                        "id": movie_data.get("id"),
+                        "title": movie_data.get("title"),
+                        "overview": movie_data.get("overview"),
+                        "release_date": release_date,
+                        "release_year": release_year,
+                        "poster_path": movie_data.get("poster_path"),
+                        "backdrop_path": movie_data.get("backdrop_path"),
+                        "genres": genres,
+                        "additional_keywords": [
+                            kw.capitalize()
+                            for kw in (movie.properties or {}).get(
+                                "justification_keywords", []
+                            )
+                        ],
+                        "vote_count": movie_data.get("vote_count"),
+                        "vote_average": movie_data.get("vote_average"),
+                        "visibility": MovieVisibility.PUBLIC,
+                        "keywords": movie_data.get("keywords", None),
+                        "director": movie_data.get("director", None),
+                        "cast": movie_data.get("cast", None),
+                        "collection": movie_data.get("collection", None),
+                        "original_language": movie_data.get("original_language", None),
+                        "origin_country": movie_data.get("origin_country", None),
+                        "original_title": movie_data.get("original_title", None),
+                        "runtime": movie_data.get("runtime", None),
+                        "tagline": movie_data.get("tagline", None),
+                    }
+                    movies_to_create.append(movie_data)
 
                     processes_to_update.append(
                         {
                             "id": movie.id,
                             "source_movie_id": movie_data.get("id"),
+                            "title": movie_data.get("title"),
+                            "release_year": release_year,
                             "status": ProcessingStatus.COMPLETED,
                         }
                     )

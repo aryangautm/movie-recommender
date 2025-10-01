@@ -8,7 +8,7 @@ celery_app.config_from_object(settings, namespace="CELERY")
 
 # You can add more queues and routing rules as needed
 celery_app.conf.task_routes = {
-    "workers.ingestion_tasks.*": {"queue": "ingestion_queue"},
+    "tasks.*": {"queue": "ingestion_queue"},
     # "workers.llm_tasks.*": {"queue": "llm_queue"},
 }
 

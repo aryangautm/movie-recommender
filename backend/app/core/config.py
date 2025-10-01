@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     MAX_VOTES_PER_DAY: int = 4
     TMDB_API_KEY: str
-    TMDB_API_V4_ACCESS_TOKEN: str
+    TMDB_API_V4_ACCESS_TOKEN: str = None
     DATABASE_URL: str
     GEMINI_API_KEY: str
     IDCODEC_XOR_KEY_HEX: str

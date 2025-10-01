@@ -119,7 +119,7 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
         config=generate_content_config,
         history=contents,
     )
-    for _ in range(12 // count):
+    for _ in range(40 // count):
         input_message = f"Recommend {count} different movies"
 
         if duplicate_movies:

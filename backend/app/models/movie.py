@@ -2,7 +2,7 @@ import enum
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, Column, Date, Enum, Float, Integer, String, Text
-from sqlalchemy.dialects.postgresql import ENUM, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
 
