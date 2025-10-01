@@ -1,0 +1,44 @@
+name: Deploy to Production
+
+on:
+  # This enables the "Run workflow" button on the Actions tab in GitHub.
+  # It allows you to manually trigger a deployment.
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: 'The branch to deploy'
+        required: true
+        type: string
+        default: 'main'
+
+  # This section is optional but recommended.
+  # It automatically deploys when you push code to the 'main' branch.
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  deploy-to-prod:
+    # This is the most important line: it tells the job to run on your VM.
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout correct branch
+        uses: actions/checkout@v4
+        with:
+          # This logic checks if the workflow was started manually (workflow_dispatch).
+          # If yes, it uses the branch name you provided.
+          # If not (e.g., it was a push to main), it uses the branch from the push event.
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.branch_name || github.ref }}
+
+      - name: Create .env file for Docker Compose
+        run: |
+          echo "${{ secrets.PRODUCTION_ENV }}" > .env
+        
+      - name: Build and Deploy Docker Containers
+        run: |
+          docker compose up --build -d
+
+      - name: Clean up old Docker images
+        run: |
+          docker image prune -af
