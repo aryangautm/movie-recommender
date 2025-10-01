@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.routes import api_router
 from app.core.config import settings
 from app.core.graph import close_graph_connection, connect_to_graph
+from app.middleware import RequestLoggingMiddleware
 
 
 @asynccontextmanager
@@ -22,6 +23,13 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Movie Recommender API", lifespan=lifespan)
 
 allowed_origins = [origin.strip() for origin in settings.CORS_ORIGINS.split(",")]
+
+# Add request logging middleware (should be added first to capture all requests)
+app.add_middleware(
+    RequestLoggingMiddleware,
+    log_health_checks=False,  # Don't log health checks in production
+    enable_async_logging=True,  # Use async logging for better performance
+)
 
 app.add_middleware(
     CORSMiddleware,
