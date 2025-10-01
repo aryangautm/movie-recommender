@@ -24,19 +24,19 @@ async def create_or_vote_on_link(
 ):
     if vote.movie_id_1 == vote.movie_id_2:
         raise HTTPException(
-            status_code=400, detail="Movies cannot be linked to themselves."
+            status_code=400, detail="Movies cannot be linked to themselves"
+        )
+
+    if await crud_vote.is_limit_exceeded(redis_client, vote.fingerprint):
+        raise HTTPException(
+            status_code=429, detail="You have exceeded your daily voting limit"
         )
 
     if not await crud_vote.can_user_vote(
         redis_client, vote.fingerprint, vote.movie_id_1, vote.movie_id_2
     ):
         raise HTTPException(
-            status_code=429, detail="You have already voted for this link recently."
-        )
-
-    if await crud_vote.is_limit_exceeded(redis_client, vote.fingerprint):
-        raise HTTPException(
-            status_code=429, detail="You have exceeded your daily voting limit."
+            status_code=429, detail="You have already voted for this link recently"
         )
 
     if not crud_recommendation.get_recommendations(
@@ -44,7 +44,7 @@ async def create_or_vote_on_link(
     ):
         raise HTTPException(
             status_code=400,
-            detail="No recommendation link exists between the two movies.",
+            detail="No recommendation link exists between the two movies",
         )
 
     celery_app.send_task(

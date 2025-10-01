@@ -100,7 +100,7 @@ async def get_trending_movies(
 
 @router.get("/search", response_model=List[MovieSearchResult])
 async def search_movies(
-    q: str = Query(..., min_length=3, description="Search query for movie titles"),
+    q: str = Query(..., min_length=2, description="Search query for movie titles"),
     limit: int = Query(5, ge=1, le=40, description="Number of results to return"),
     db: AsyncSession = Depends(get_async_db),
 ):

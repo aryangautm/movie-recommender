@@ -13,7 +13,7 @@ GENRE_CACHE_KEY = "tmdb:genre_map"
 GENRE_CACHE_TTL = 7 * 24 * 60 * 60
 
 
-chars_to_remove = "·'.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
+chars_to_remove = "·':.-" + '"' + "!@#$%^&*()_+=[]{}|;<>?,/\\`~"
 translation_table = str.maketrans("", "", chars_to_remove)
 
 
