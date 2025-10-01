@@ -29,6 +29,7 @@ app.add_middleware(
     RequestLoggingMiddleware,
     log_health_checks=False,  # Don't log health checks in production
     enable_async_logging=True,  # Use async logging for better performance
+    log_request_body=True,  # Enable request body logging for payload capture
 )
 
 app.add_middleware(
