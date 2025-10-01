@@ -2,8 +2,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Suggestion } from '../App';
-import { UpArrowIcon, SpinnerIcon } from './icons';
+import { ThumbsUpIcon, SpinnerIcon } from './icons';
 import { getFingerprint } from '../utils/fingerprint';
+import { useToast } from './Toast';
 
 interface SuggestionCardProps {
   suggestion: Suggestion;
@@ -16,6 +17,7 @@ import { API_URL } from '../api/config';
 
 const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sourceMovieId }) => {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const posterUrl = suggestion.posterPath
     ? `${IMAGES_BASE_URL}/${POSTER_SIZE}${suggestion.posterPath}`
     : `https://placehold.co/128x192/1C1C1E/FFFFFF/png?text=${encodeURIComponent(suggestion.title)}`;
@@ -43,7 +45,21 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sour
       });
 
       if (!response.ok) {
-        throw new Error('Upvote failed');
+        // Handle 429 status specifically
+        if (response.status === 429) {
+          try {
+            const errorData = await response.json();
+            const message = errorData.detail || 'You have already voted for this link recently.';
+            showToast(message, 'warning');
+          } catch (parseError) {
+            // Fallback if JSON parsing fails
+            showToast('You have already voted for this link recently.', 'warning');
+          }
+        } else {
+          throw new Error('Upvote failed');
+        }
+        setUpvoteState('idle');
+        return;
       }
 
       setUpvoteState('success');
@@ -73,11 +89,20 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sour
         <div className="flex-grow overflow-hidden min-w-0">
           <h3 className="font-semibold text-white line-clamp-1">{suggestion.title} ({suggestion.releaseYear})</h3>
           {suggestion.justification && suggestion.justification.length > 0 ? (
-            <p className="text-sm text-gray-400 mt-1 line-clamp-1">{suggestion.justification.join(', ')}</p>
+            <p className="text-sm text-gray-400 mt-2 line-clamp-2">
+              {suggestion.justification
+                .map(j =>
+                  j
+                    .split(' ')
+                    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+                    .join(' ')
+                )
+                .join(' • ')
+              }
+            </p>
           ) : (
             <p className="text-sm text-gray-400 mt-1 line-clamp-1">{suggestion.overview}</p>
           )}
-          <p className="text-xs text-gray-500 mt-2">Year of Release: {suggestion.releaseYear}</p>
         </div>
 
         <div className="flex-shrink-0">
@@ -91,9 +116,9 @@ const SuggestionCard: React.FC<SuggestionCardProps> = ({ suggestion, index, sour
             `}
             aria-label={`Upvote ${suggestion.title}`}
           >
-            {upvoteState === 'idle' && <UpArrowIcon className="w-5 h-5" />}
+            {upvoteState === 'idle' && <ThumbsUpIcon className="w-5 h-5" />}
             {upvoteState === 'loading' && <SpinnerIcon className="w-5 h-5" />}
-            {upvoteState === 'success' && <UpArrowIcon className="w-5 h-5" />}
+            {upvoteState === 'success' && <ThumbsUpIcon className="w-5 h-5" />}
           </button>
         </div>
       </div>
