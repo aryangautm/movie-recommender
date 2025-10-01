@@ -1,0 +1,17 @@
+services:
+
+  backend-service:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    volumes:
+      - ./backend:/app
+    env_file:
+      - ./.env
+    networks:
+      - app-network
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      redis:
+        condition: service_started
