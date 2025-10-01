@@ -1,11 +1,15 @@
-# Movie(s)Network: Recommendations Beyond Ratings
+# MoviesNetwork: Recommendations Beyond Ratings
 
 <p align="center">
     <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python Version">
     <img src="https://img.shields.io/badge/Framework-FastAPI-green" alt="FastAPI">
     <img src="https://img.shields.io/badge/Graph-Neo4j-orange.svg" alt="Neo4j Version">
-    <img src="https://img.shields.io/badge/license-Apache--2.0-lightgrey" alt="License">
+    <img src="https://img.shields.io/badge/Graph-Neo4j-orange.svg" alt="Neo4j Version">
+    <img src="https://img.shields.io/badge/Cache-Redis-DC382D.svg" alt="Neo4j Version">
+    <img src="https://img.shields.io/badge/License-Apache--2.0-lightgrey" alt="License">
 </p>
+
+![Image](https://github.com/user-attachments/assets/783c0aa1-41d9-4bb8-a15e-65a831b3f8ce)
 
 Movie(s)Network is a modern movie recommendation engine built on a simple yet powerful philosophy: **ratings are flawed, but relationships are meaningful.** Instead of asking "Is this movie good?", we ask "What does this movie *feel* like?".
 
@@ -15,10 +19,9 @@ This project moves away from traditional star ratings and instead builds a dynam
 
 ## ✨ Core Features
 
-*   **🧠 AI-Powered Similarity:** Utilizes Sentence-BERT models to understand the semantic meaning of movie plots, themes, and tone, creating a rich baseline of connections.
 *   **🕸️ Graph-Based Network:** All movies and their relationships are stored in a Neo4j graph database, allowing for powerful and fast traversal to find "movies like this one."
-*   **🚫 Rating-Free Philosophy:** No 5-star ratings. No thumbs up/down. Recommendations are discovered by exploring connections between movies you already know.
-*   **🔗 Community-Driven Connections (V2):** The AI-seeded graph is designed to be augmented by user votes, allowing the community to collaboratively define what makes movies similar.
+*   **🚫 Rating-Free Philosophy:** No ratings. Recommendations are discovered by exploring connections between movies you already know.
+*   **🔗 Community-Driven Connections:** The AI-seeded graph is designed to be augmented by user votes, allowing the community to collaboratively define what makes movies similar.
 *   **🚀 Built for Scale:** A modern, modular architecture using FastAPI, PostgreSQL, and Neo4j, designed to be scalable, maintainable, and production-ready.
 
 ---
@@ -30,10 +33,10 @@ The system is built with a decoupled, microservice-friendly approach.
 | Component             | Technology                                                              | Purpose                                          |
 | --------------------- | ----------------------------------------------------------------------- | ------------------------------------------------ |
 | **Backend API**       | ![FastAPI](https://img.shields.io/badge/FastAPI-0?style=flat&logo=fastapi) | High-performance, asynchronous API service.      |
-| **Relational Data**   | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-61DAFB?style=flat&logo=postgresql) | Stores static movie metadata (titles, overviews). |
+| **Relational Data**   | ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-61DAFB?style=flat&logo=postgresql) | Stores static movie metadata (titles, overviews) and API request logs. |
 | **Graph Data**        | ![Neo4j](https://img.shields.io/badge/Neo4j-white?style=flat&logo=neo4j) | Stores the core movie-similarity graph network.  |
-| **AI / Embeddings**   | ![PyTorch](https://img.shields.io/badge/PyTorch-lightgrey?style=flat&logo=pytorch) `sentence-transformers` | Generates semantic vectors from movie text.      |
-| **Async Tasks (V2)**  | ![Celery](https://img.shields.io/badge/Celery-37814A?style=flat&logo=celery) ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis) | Manages background jobs like voting updates.     |
+| **Embeddings**   | ![PyTorch](https://img.shields.io/badge/PyTorch-lightgrey?style=flat&logo=pytorch) `sentence-transformers` | Generates semantic vectors from movie text.      |
+| **Async Tasks**  | ![Celery](https://img.shields.io/badge/Celery-37814A?style=flat&logo=celery) ![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis) | Manages background jobs like voting updates and data ingestion.     |
 | **Frontend (Planned)**| ![React](https://img.shields.io/badge/React-lightgrey?style=flat&logo=react) | The user interface for discovery.                |
 
 ### High-Level System Flow (MVP)
@@ -46,10 +49,10 @@ The system is built with a decoupled, microservice-friendly approach.
                                  |
                                  |
                                  v
-                         +------------------+
-                         |   Neo4j Graph DB |
+                         +--------------------+
+                         |   Neo4j Graph DB   |
                          | (Similarity Edges) |
-                         +------------------+
+                         +--------------------+
 ```
 
 ---
@@ -62,7 +65,8 @@ Follow these steps to get the backend running locally.
 
 *   Python 3.10+
 *   Docker (Recommended for databases) or local installations of PostgreSQL and Neo4j.
-*   An API key from [The Movie Database (TMDb)](https://www.themoviedb.org/settings/api).
+*   [TMDb](https://www.themoviedb.org/settings/api) API Key
+*   [Gemini](https://aistudio.google.com/api-keys) API Key
 
 ### 1. Clone the Repository
 
@@ -116,7 +120,7 @@ python -m scripts.seed_graph
 uvicorn app.main:app --reload
 ```
 
-### 6. Run Celery Worker (Optional, for V2 features)
+### 6. Run Celery Worker
 ```bash
 celery -A workers.celery_config worker -P eventlet -c 100 -l info -Q ingestion_queue -n ingestion_worker@%h
 ```
