@@ -16,6 +16,14 @@ on:
   push:
     branches:
       - 'main'
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.gitattributes'
+      - 'LICENSE'
+      - 'docs/**'
+      - '.vscode/**'
+      - '.idea/**'
 
 jobs:
   deploy-to-prod:
