@@ -26,6 +26,7 @@ const FocusPage: React.FC = () => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
+  const [isStreamingComplete, setIsStreamingComplete] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -110,6 +111,7 @@ const FocusPage: React.FC = () => {
     setSuggestionState('loading');
     setSuggestionError(null);
     setSuggestions([]); // Clear existing suggestions for fresh start
+    setIsStreamingComplete(false);
 
     try {
       let keywords = options?.keywords || [];
@@ -140,7 +142,7 @@ const FocusPage: React.FC = () => {
 
       // Switch to showing state immediately to enable real-time updates
       setSuggestionState('showing');
-      setIsLoadingSuggestions(false); // Stop loading spinner to show content as it comes
+      // Keep loading spinner active during streaming
 
       try {
         while (true) {
@@ -148,6 +150,8 @@ const FocusPage: React.FC = () => {
 
           if (done) {
             console.log('Stream completed');
+            setIsStreamingComplete(true);
+            setIsLoadingSuggestions(false);
             break;
           }
 
@@ -224,6 +228,11 @@ const FocusPage: React.FC = () => {
 
       } finally {
         reader.releaseLock();
+        // Ensure loading state is properly set when streaming ends
+        if (!isStreamingComplete) {
+          setIsStreamingComplete(true);
+          setIsLoadingSuggestions(false);
+        }
       }
 
     } catch (err: any) {
@@ -231,8 +240,9 @@ const FocusPage: React.FC = () => {
       setSuggestionError(err.message || "Couldn't load suggestions. Please try again later.");
       // Don't clear suggestions here - preserve any that were successfully loaded
       setSuggestionState('showing');
+      setIsStreamingComplete(true);
+      setIsLoadingSuggestions(false);
     }
-    // Note: We don't set setIsLoadingSuggestions(false) here anymore as it's set earlier for real-time updates
   }, [movie]);
 
   useEffect(() => {
@@ -240,6 +250,7 @@ const FocusPage: React.FC = () => {
     window.scrollTo(0, 0);
     setSuggestions([]);
     setSuggestionError(null);
+    setIsStreamingComplete(false);
 
     const hasKeywords = movie.keywords && movie.keywords.length > 0;
     if (hasKeywords) {
@@ -305,22 +316,30 @@ const FocusPage: React.FC = () => {
   const SuggestionsContent = (
     <>
       <h2 className="text-2xl font-semibold mb-6">Similar Suggestions</h2>
-      {isLoadingSuggestions ? (
-        <div className="flex justify-center items-center py-10">
-          <SpinnerIcon className="w-8 h-8 text-white" />
-        </div>
-      ) : suggestionError ? (
+      {suggestionError ? (
         <div className="text-center py-10 text-white-400">{suggestionError}</div>
       ) : suggestions.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
-          {suggestions.map((suggestion, index) => (
-            <SuggestionCard
-              key={suggestion.id}
-              suggestion={suggestion}
-              index={index + 1}
-              sourceMovieId={movie.id}
-            />
-          ))}
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-8">
+            {suggestions.map((suggestion, index) => (
+              <SuggestionCard
+                key={suggestion.id}
+                suggestion={suggestion}
+                index={index + 1}
+                sourceMovieId={movie.id}
+              />
+            ))}
+          </div>
+          {isLoadingSuggestions && (
+            <div className="flex justify-center items-center py-6 mt-6">
+              <SpinnerIcon className="w-6 h-6 text-white" />
+              <span className="ml-2 text-white/70">More on the way...</span>
+            </div>
+          )}
+        </>
+      ) : isLoadingSuggestions ? (
+        <div className="flex justify-center items-center py-10">
+          <SpinnerIcon className="w-8 h-8 text-white" />
         </div>
       ) : (
         <div className="text-center py-10 text-gray-400">
