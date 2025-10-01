@@ -4,8 +4,7 @@
     <img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python Version">
     <img src="https://img.shields.io/badge/Framework-FastAPI-green" alt="FastAPI">
     <img src="https://img.shields.io/badge/Graph-Neo4j-orange.svg" alt="Neo4j Version">
-    <img src="https://img.shields.io/badge/Graph-Neo4j-orange.svg" alt="Neo4j Version">
-    <img src="https://img.shields.io/badge/Cache-Redis-DC382D.svg" alt="Neo4j Version">
+    <img src="https://img.shields.io/badge/Cache-Redis-DC382D.svg" alt="Redis">
     <img src="https://img.shields.io/badge/License-Apache--2.0-lightgrey" alt="License">
 </p>
 
