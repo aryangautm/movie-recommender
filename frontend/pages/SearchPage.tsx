@@ -13,7 +13,7 @@ const SearchPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [debouncedQuery, setDebouncedQuery] = useState(searchQuery);
 
-  const isSearchActive = searchQuery.length >= 3;
+  const isSearchActive = searchQuery.length >= 2;
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -26,7 +26,7 @@ const SearchPage: React.FC = () => {
   }, [searchQuery]);
 
   useEffect(() => {
-    if (debouncedQuery.length < 3) {
+    if (debouncedQuery.length < 2) {
       setSearchResults([]);
       setIsLoading(false);
       return;
