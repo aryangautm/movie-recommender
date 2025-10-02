@@ -130,7 +130,7 @@ async def read_movie(movie_id: str, db: AsyncSession = Depends(get_async_db)):
 
     ai_keywords = []
     if not db_movie.ai_keywords:
-        ai_keywords = generate_keywords(db_movie.title, db_movie.release_year)
+        ai_keywords = generate_keywords(db_movie.title, db_movie.release_date)
         await crud_movie.bulk_patch_movies(
             db, [{"id": db_movie.id, "ai_keywords": ai_keywords}]
         )
