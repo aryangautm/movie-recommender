@@ -1,4 +1,5 @@
 import time
+from datetime import date
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -149,7 +150,8 @@ def multi_turn_rec(movie: Dict[str, Any], selected_keywords: List[str]):
         yield sim_movies
 
 
-def generate_keywords(title: str, release_year: int) -> str:
+def generate_keywords(title: str, release_date: date) -> str:
+    release_year = release_date.year or None
     client = genai.Client(
         api_key=settings.GEMINI_API_KEY,
     )
@@ -170,7 +172,7 @@ def generate_keywords(title: str, release_year: int) -> str:
         [
             types.Tool(googleSearch=types.GoogleSearch()),
         ]
-        if release_year >= 2023
+        if not release_year or release_year >= 2023
         else []
     )
 
