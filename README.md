@@ -8,7 +8,7 @@
     <img src="https://img.shields.io/badge/License-Apache--2.0-lightgrey" alt="License">
 </p>
 
-![Image](https://github.com/user-attachments/assets/783c0aa1-41d9-4bb8-a15e-65a831b3f8ce)
+![Image](https://github.com/user-attachments/assets/822001f2-b6b3-4eaf-aee3-605861410da5)
 
 Movie(s)Network is a modern movie recommendation engine built on a simple yet powerful philosophy: **ratings are flawed, but relationships are meaningful.** Instead of asking "Is this movie good?", we ask "What does this movie *feel* like?".
 
